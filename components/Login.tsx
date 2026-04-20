@@ -197,8 +197,94 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                             {loading ? <Loader2 className="animate-spin" /> : <>Entrar <ArrowRight size={18} /></>}
                         </button>
                     </form>
+
+                    <div className="text-center mt-6">
+                        <p className="text-slate-500 text-sm">
+                            Não tem uma conta?{' '}
+                            <button 
+                                onClick={() => setStep('register_data')}
+                                className="text-indigo-400 font-bold hover:text-indigo-300 transition-colors"
+                            >
+                                Cadastre-se
+                            </button>
+                        </p>
+                    </div>
                 </div>
             </>
+        )}
+
+        {step === 'register_data' && (
+            <div className="animate-fade-in space-y-6">
+                <button 
+                    onClick={() => setStep('login')}
+                    className="text-slate-500 hover:text-white flex items-center gap-2 text-sm transition-colors mb-4"
+                >
+                    <ArrowLeft size={16} /> Voltar ao Login
+                </button>
+
+                <div className="text-center mb-8">
+                    <h2 className="text-2xl font-bold text-white mb-2">Crie sua Conta</h2>
+                    <p className="text-slate-400 text-sm">Junte-se ao estúdio VoxGen AI hoje</p>
+                </div>
+
+                {error && <div className="bg-red-500/10 text-red-400 p-3 rounded-lg text-xs text-center border border-red-500/20">{error}</div>}
+
+                <div className="space-y-4">
+                    <div className="relative">
+                        <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                        <input 
+                            type="text" 
+                            placeholder="Nome completo" 
+                            value={name} 
+                            onChange={e => setName(e.target.value)}
+                            className="w-full bg-slate-800 border border-slate-700 rounded-xl py-3.5 pl-11 pr-4 text-white placeholder-slate-500 focus:border-indigo-500 outline-none transition-colors" 
+                        />
+                    </div>
+                    <div className="relative">
+                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                        <input 
+                            type="email" 
+                            placeholder="Seu e-mail" 
+                            value={email} 
+                            onChange={e => setEmail(e.target.value)}
+                            className="w-full bg-slate-800 border border-slate-700 rounded-xl py-3.5 pl-11 pr-4 text-white placeholder-slate-500 focus:border-indigo-500 outline-none transition-colors" 
+                        />
+                    </div>
+                    <div className="relative">
+                        <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                        <input 
+                            type="password" 
+                            placeholder="Crie uma senha" 
+                            value={password} 
+                            onChange={e => setPassword(e.target.value)}
+                            className="w-full bg-slate-800 border border-slate-700 rounded-xl py-3.5 pl-11 pr-4 text-white placeholder-slate-500 focus:border-indigo-500 outline-none transition-colors" 
+                        />
+                    </div>
+                    
+                    <button 
+                        onClick={async () => {
+                            if (!name || !email || !password) {
+                                setError('Preencha todos os campos.');
+                                return;
+                            }
+                            setLoading(true);
+                            setError('');
+                            // Simulação de cadastro
+                            await new Promise(r => setTimeout(r, 1500));
+                            localStorage.setItem(`user_${email}`, password);
+                            onLogin('user', email);
+                        }}
+                        disabled={loading}
+                        className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-indigo-900/20 flex items-center justify-center gap-2"
+                    >
+                        {loading ? <Loader2 className="animate-spin" /> : <>Criar Conta <UserPlus size={18} /></>}
+                    </button>
+                </div>
+
+                <p className="text-[10px] text-center text-slate-500 leading-relaxed">
+                    Ao se cadastrar, você concorda com nossos <span className="text-slate-400 underline cursor-pointer">Termos de Uso</span> e <span className="text-slate-400 underline cursor-pointer">Privacidade</span>.
+                </p>
+            </div>
         )}
 
         {/* --- TELA DE CONFIRMAÇÃO INTERMEDIÁRIA (Enterprise Standard) --- */}

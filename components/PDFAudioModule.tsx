@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { FileText, Play, Pause, Square, Youtube, Volume2, Settings, AlertCircle, Loader2, FastForward, RotateCcw, Upload, Clock, CheckCircle, Sparkles, Wand2 } from 'lucide-react';
+import { FileText, Play, Pause, Square, Youtube, Volume2, Settings, AlertCircle, Loader2, FastForward, RotateCcw, Upload, Clock, CheckCircle, Sparkles, Wand2, Scissors } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
-import { generateSpeech, refineText } from '../services/geminiService';
+import { generateSpeech, refineText, summarizeText } from '../services/geminiService';
 import { ToneType, VoiceName } from '../types';
 import { decodeAudioData } from '../utils/audioUtils';
 
@@ -32,6 +32,8 @@ const PDFAudioModule: React.FC<PDFModuleProps> = () => {
   const [selectedVoice, setSelectedVoice] = useState<string>(VoiceName.Zephyr);
   const [readingStyle, setReadingStyle] = useState<ToneType>(ToneType.Neutral);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [useSummary, setUseSummary] = useState(false);
   const [videoId, setVideoId] = useState<string | null>(null);
 
   // Audio Context and Source for Realistic playback
@@ -136,9 +138,23 @@ const PDFAudioModule: React.FC<PDFModuleProps> = () => {
   const handleStartPlayback = async () => {
     if (extractedText.length === 0) return;
     
-    const fullText = extractedText.join(' ');
+    let textToRead = extractedText.join(' ');
+    
+    // Se o modo resumo estiver ativo, processamos o texto primeiro
+    if (useSummary) {
+      setIsSummarizing(true);
+      setError(null);
+      try {
+        textToRead = await summarizeText(textToRead);
+      } catch (err) {
+        console.error("Falha ao resumir:", err);
+      } finally {
+        setIsSummarizing(false);
+      }
+    }
+
     // Split into smaller parts, but ensure we don't have empty sentences and handle long ones
-    let sentences = fullText.match(/[^\.!\?]+[\.!\?]+/g) || [fullText];
+    let sentences = textToRead.match(/[^\.!\?]+[\.!\?]+/g) || [textToRead];
     
     // Safety check: ensure sentences aren't extremely long (over 1000 chars) as it can crash the API
     sentences = sentences.flatMap(s => {
@@ -399,8 +415,22 @@ const PDFAudioModule: React.FC<PDFModuleProps> = () => {
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="flex items-center gap-2 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5">
+              <div className="flex flex-wrap items-center gap-4">
+                <button
+                  onClick={() => setUseSummary(!useSummary)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all ${
+                    useSummary 
+                      ? 'bg-amber-600/20 border-amber-500/50 text-amber-400 font-bold' 
+                      : 'bg-slate-900 border-slate-700 text-slate-400'
+                  }`}
+                  title="Resumir o texto antes de ler para economizar créditos"
+                >
+                  <Scissors size={14} />
+                  <span className="text-[10px] uppercase">Modo Resumo (IA)</span>
+                  {useSummary && <CheckCircle size={10} />}
+                </button>
+
+                <div className="flex items-center gap-2 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5">
                 <Sparkles size={16} className="text-amber-400" />
                 <div className="flex flex-col">
                   <span className="text-[10px] text-slate-500 uppercase font-bold leading-none mb-1">Narração Realista</span>
@@ -506,9 +536,14 @@ const PDFAudioModule: React.FC<PDFModuleProps> = () => {
               <h3 className="text-xs font-bold text-slate-400 uppercase flex items-center gap-2">
                 <RotateCcw size={14} /> Texto Processado
               </h3>
-                {isPlaying && !isPaused && (
+                {(isPlaying || isSummarizing) && !isPaused && (
                   <div className="text-[10px] text-indigo-400 flex items-center gap-2">
-                    {isSynthesizing ? (
+                    {isSummarizing ? (
+                      <>
+                        <Loader2 size={10} className="animate-spin text-amber-400" />
+                        <span className="text-amber-400">Resumindo conteúdo vital...</span>
+                      </>
+                    ) : isSynthesizing ? (
                       <>
                         <Loader2 size={10} className="animate-spin" />
                         Gerando áudio realista...

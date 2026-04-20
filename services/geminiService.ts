@@ -231,3 +231,33 @@ export const generateSongMetadata = async (description: string, lyrics?: string)
     };
   }
 };
+
+export const summarizeText = async (text: string): Promise<string> => {
+  if (!text.trim()) return text;
+  const ai = getClient();
+
+  const prompt = `
+    Você é um especialista em síntese de conteúdo.
+    Tarefa: Resumir o texto abaixo mantendo os pontos principais, mas reduzindo drasticamente o número de palavras (em cerca de 70-80%).
+    O objetivo é preparar o texto para uma narração curta e objetiva.
+    
+    REGRAS:
+    1. Retorne APENAS o resumo final em Português Brasil.
+    2. Linguagem natural e fluida para áudio.
+    3. Mantenha a essência e os fatos principais.
+    
+    TEXTO PARA RESUMIR:
+    "${text}"
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+    });
+    return response.text?.trim() || text;
+  } catch (e) {
+    console.error("Erro ao resumir:", e);
+    return text;
+  }
+};
