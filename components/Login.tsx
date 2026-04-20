@@ -104,7 +104,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     if (googleBtn) {
         (window as any).google.accounts.id.renderButton(
             googleBtn,
-            { theme: "outline", size: "large", width: "100%", text: "continue_with" }
+            { theme: "outline", size: "large", width: 400, text: "continue_with" }
         );
     }
   };
