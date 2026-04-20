@@ -126,6 +126,15 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole }) => {
           <h2 className="text-xl font-bold text-white mb-2">Smart Player</h2>
           <p className="text-slate-400 text-xs">Rádio inteligente com anúncios e músicas automatizadas.</p>
         </button>
+
+        <button onClick={() => onSelectMode(AppMode.PDFAudio)} className="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 hover:border-rose-500/50 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl">
+          <div className="absolute inset-0 bg-gradient-to-br from-rose-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="w-16 h-16 bg-rose-500/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+            <BookOpen size={32} className="text-rose-400" />
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">PDF Imersivo</h2>
+          <p className="text-slate-400 text-xs">Leitura de PDF em voz alta com fundo de vídeo YouTube.</p>
+        </button>
       </div>
     </div>
   );

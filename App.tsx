@@ -11,12 +11,13 @@ import SFXStudio from './components/SFXStudio';
 import SmartPlayer from './components/SmartPlayer';
 import MangaStudio from './components/MangaStudio';
 import VoiceCloningStudio from './components/VoiceCloningStudio';
+import PDFAudioModule from './components/PDFAudioModule';
 import AdminPanel from './components/AdminPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import Login from './components/Login';
 import VoiceAssistant from './components/VoiceAssistant';
 import { AudioItem, ProcessingState, ToneType, VoiceName, AppMode, UserRole, UserSession } from './types';
-import { DEFAULT_TEXT } from './constants';
+import { DEFAULT_TEXT, VIGNETTE_TEXT } from './constants';
 import { refineText, generateSpeech, addAutomaticSFX } from './services/geminiService';
 import { decodeAudioData, addBackgroundMusic } from './utils/audioUtils';
 import { canGenerateNarration, incrementUsage } from './services/monetizationService';
@@ -200,7 +201,35 @@ const AppContent: React.FC = () => {
         if (useMusic) { finalBuffer = await addBackgroundMusic(speechBuffer, selectedTone, ctx); }
         const newItem: AudioItem = { id: crypto.randomUUID(), text: text, voice: selectedVoice, audioData: finalBuffer, createdAt: new Date(), duration: finalBuffer.duration };
         setHistory(prev => [newItem, ...prev]);
-        if (user?.role !== 'admin' && !isSuperAdmin && user?.role !== 'corporate-admin') { incrementUsage(); }
+        
+        // Monetization & Vignette Trigger
+        let currentCount = 0;
+        if (user?.role !== 'admin' && !isSuperAdmin && user?.role !== 'corporate-admin') { 
+            currentCount = incrementUsage(); 
+        } else {
+            // Track for admins so they can test/see the feature
+            const total = parseInt(localStorage.getItem('voxgen_total_usage_v1') || '0') + 1;
+            localStorage.setItem('voxgen_total_usage_v1', total.toString());
+            currentCount = total;
+        }
+
+        // Trigger CTA Vignette every 5th narration
+        if (currentCount > 0 && currentCount % 5 === 0) {
+            console.log(`[VoxGen CTA] Triggering vignette for narration #${currentCount}`);
+            setTimeout(async () => {
+                try {
+                    const vignetteBase64 = await generateSpeech(VIGNETTE_TEXT, VoiceName.Zephyr); // Usando Zephyr para a vinheta ficar mais amigável
+                    const vBuffer = await decodeAudioData(vignetteBase64, ctx);
+                    const vSource = ctx.createBufferSource();
+                    vSource.buffer = vBuffer;
+                    vSource.connect(masterGainNodeRef.current || ctx.destination);
+                    vSource.start(0);
+                    // Adicionamos no histórico também para o usuário poder ouvir de novo
+                    const vignetteItem: AudioItem = { id: `cta-${currentCount}`, text: "[VINHETA CTA] " + VIGNETTE_TEXT, voice: VoiceName.Zephyr, audioData: vBuffer, createdAt: new Date(), duration: vBuffer.duration };
+                    setHistory(prev => [vignetteItem, ...prev]);
+                } catch (e) { console.error("Erro ao reproduzir vinheta CTA", e); }
+            }, 2000);
+        }
       }
     } catch (err: any) {
       const msg = err.message || "Erro desconhecido ao gerar áudio.";
@@ -293,6 +322,7 @@ const AppContent: React.FC = () => {
          {mode === AppMode.Manga && <MangaStudio audioContext={audioContextRef.current} initAudioContext={initAudioContext} />}
          {mode === AppMode.SFX && <SFXStudio audioContext={audioContextRef.current} initAudioContext={initAudioContext} />}
          {mode === AppMode.VoiceCloning && <VoiceCloningStudio audioContext={audioContextRef.current} initAudioContext={initAudioContext} userEmail={user.email} />}
+         {mode === AppMode.PDFAudio && <PDFAudioModule />}
       </main>
       
       <footer className="p-6 text-center text-slate-500 text-xs border-t border-slate-900/50 bg-[#0f172a] mt-auto">

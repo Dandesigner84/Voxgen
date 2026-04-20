@@ -13,6 +13,8 @@ export enum ToneType {
   Professional = 'Professional',
   Soothing = 'Soothing',
   Dramatic = 'Dramatic',
+  Romantic = 'Romantic',
+  Suspense = 'Suspense',
   Sales = 'Sales (Black Friday)',
   Preaching = 'Preaching'
 }
@@ -27,6 +29,7 @@ export enum AppMode {
   Manga = 'Manga',
   Admin = 'Admin',
   VoiceCloning = 'VoiceCloning',
+  PDFAudio = 'PDFAudio',
 }
 
 export interface AudioItem {

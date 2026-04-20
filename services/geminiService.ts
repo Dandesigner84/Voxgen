@@ -48,6 +48,10 @@ export const refineText = async (text: string, tone: ToneType | string, useBackg
       specificInstruction += " ESTILO DRAMÁTICO: Use pausas e emoção. ";
   } else if (tone === ToneType.Professional) {
       specificInstruction += " ESTILO PROFISSIONAL: Linguagem corporativa, clara e polida. ";
+  } else if (tone === ToneType.Romantic) {
+      specificInstruction += " ESTILO ROMÂNTICO: Voz suave, pausada e com carga emocional carinhosa. ";
+  } else if (tone === ToneType.Suspense) {
+      specificInstruction += " ESTILO SUSPENSE: Voz misteriosa, sussurrada em alguns momentos e com ritmo tenso. ";
   }
 
   const prompt = `

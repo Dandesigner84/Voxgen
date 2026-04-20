@@ -4,7 +4,8 @@ import { PremiumCode, UserStatus } from "../types";
 const STORAGE_KEYS = {
   USER_STATUS: 'voxgen_user_status_v1',
   CODES: 'voxgen_codes_db_v1',
-  USAGE: 'voxgen_daily_usage_v1'
+  USAGE: 'voxgen_daily_usage_v1',
+  TOTAL_USAGE: 'voxgen_total_usage_v1'
 };
 
 // Configurações do Plano Free
@@ -96,6 +97,13 @@ export const incrementUsage = () => {
   const usageData = JSON.parse(localStorage.getItem(STORAGE_KEYS.USAGE) || '{}');
   usageData[todayKey] = (usageData[todayKey] || 0) + 1;
   localStorage.setItem(STORAGE_KEYS.USAGE, JSON.stringify(usageData));
+
+  // Global counter for vignettes/analytics
+  const totalUsage = parseInt(localStorage.getItem(STORAGE_KEYS.TOTAL_USAGE) || '0');
+  const newTotal = totalUsage + 1;
+  localStorage.setItem(STORAGE_KEYS.TOTAL_USAGE, newTotal.toString());
+  
+  return newTotal;
 };
 
 export const canGenerateNarration = (): { allowed: boolean; message?: string } => {

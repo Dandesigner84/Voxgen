@@ -1,8 +1,8 @@
 {
-  "name": "Remix: VoxGen AI ",
+  "name": "VoxGen AI ",
   "description": "Plataforma completa de criação com IA: Narração, Música, Manga Studio e Rádio Inteligente.",
   "requestFramePermissions": [
-    "microphone",
-    "identity-credentials-get"
-  ]
+    "microphone"
+  ],
+  "majorCapabilities": []
 }
