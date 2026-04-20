@@ -137,9 +137,21 @@ const PDFAudioModule: React.FC<PDFModuleProps> = () => {
     if (extractedText.length === 0) return;
     
     const fullText = extractedText.join(' ');
-    // Split into smaller parts for better API performance and realism
-    const sentences = fullText.match(/[^\.!\?]+[\.!\?]+/g) || [fullText];
+    // Split into smaller parts, but ensure we don't have empty sentences and handle long ones
+    let sentences = fullText.match(/[^\.!\?]+[\.!\?]+/g) || [fullText];
     
+    // Safety check: ensure sentences aren't extremely long (over 1000 chars) as it can crash the API
+    sentences = sentences.flatMap(s => {
+      if (s.length < 1000) return [s];
+      const subParts: string[] = [];
+      let current = s;
+      while (current.length > 0) {
+        subParts.push(current.substring(0, 1000));
+        current = current.substring(1000);
+      }
+      return subParts;
+    }).filter(s => s.trim().length > 0);
+
     if (sentences.length === 0) return;
     currentSentencesRef.current = sentences;
     
@@ -202,11 +214,12 @@ const PDFAudioModule: React.FC<PDFModuleProps> = () => {
       };
       
       source.start();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erro na leitura realista:", err);
       setIsPlaying(false);
       setIsSynthesizing(false);
-      setError("Erro ao gerar narração realista. Tente novamente ou verifique sua conexão.");
+      const errorMessage = err?.message || "Erro desconhecido";
+      setError(`Erro na narração: ${errorMessage}. Verifique se sua chave API está correta ou tente um trecho menor.`);
     }
   };
 

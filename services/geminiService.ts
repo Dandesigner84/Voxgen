@@ -9,7 +9,7 @@ const STORAGE_KEYS = {
 };
 
 const getClient = () => {
-  const rawKey = process.env.API_KEY || "";
+  const rawKey = process.env.GEMINI_API_KEY || "";
   const cleanKey = rawKey.replace(/["'\s]/g, ""); 
   return new GoogleGenAI({ apiKey: cleanKey });
 };
@@ -121,11 +121,11 @@ const callTTS = async (textChunk: string, voiceName: string, isCustom: boolean):
                 const mimeType = getMimeTypeFromBase64(customVoiceData.audioSampleBase64);
                 const base64Sample = customVoiceData.audioSampleBase64.split(',')[1] || customVoiceData.audioSampleBase64;
                 const response = await ai.models.generateContent({
-                    model: "gemini-2.5-flash-native-audio-preview-09-2025",
+                    model: "gemini-3.1-flash-live-preview",
                     contents: {
                         parts: [
                             { inlineData: { mimeType: mimeType, data: base64Sample } },
-                            { text: `Read exactly in Portuguese Brazil: "${textChunk}"` }
+                            { text: `Leia exatamente em Português Brasil: "${textChunk}"` }
                         ]
                     },
                     config: { responseModalities: [Modality.AUDIO] }
@@ -133,7 +133,7 @@ const callTTS = async (textChunk: string, voiceName: string, isCustom: boolean):
                 return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
             } 
             const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash-preview-tts",
+                model: "gemini-3.1-flash-tts-preview",
                 contents: [{ parts: [{ text: textChunk }] }],
                 config: {
                     responseModalities: [Modality.AUDIO],
