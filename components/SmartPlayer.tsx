@@ -520,11 +520,30 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
       isNarratingRef.current = true;
       setIsNarratingUI(true); 
       if (!hasFadedOutRef.current) lowerVolume(0.5);
+      
       const source = ctx.createBufferSource();
       source.buffer = buffer;
       const voiceGain = ctx.createGain();
-      voiceGain.gain.value = isSmartEqEnabled ? 1.2 : 1.0; 
-      source.connect(voiceGain);
+      
+      // Aumentar narração em 15% (1.2 * 1.15 = 1.38)
+      voiceGain.gain.value = isSmartEqEnabled ? 1.4 : 1.0; 
+
+      if (isSmartEqEnabled) {
+          // Efeito Stereo Widening (Haas Effect)
+          const splitter = ctx.createChannelSplitter(2);
+          const merger = ctx.createChannelMerger(2);
+          const delay = ctx.createDelay();
+          delay.delayTime.value = 0.020; // 20ms de atraso para o canal direito
+
+          source.connect(splitter);
+          splitter.connect(merger, 0, 0); // Canal Esquerdo (Direto)
+          splitter.connect(delay, 0);    // Canal Direito (via Delay)
+          delay.connect(merger, 0, 1);
+          merger.connect(voiceGain);
+      } else {
+          source.connect(voiceGain);
+      }
+
       voiceGain.connect(ctx.destination);
       narrationSourceNodeRef.current = source;
       source.onended = () => {
@@ -543,9 +562,10 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
       if (gainNodeRef.current) {
           gainNodeRef.current.gain.cancelScheduledValues(ctx.currentTime);
           gainNodeRef.current.gain.setValueAtTime(gainNodeRef.current.gain.value, ctx.currentTime);
-          gainNodeRef.current.gain.linearRampToValueAtTime(0.15, ctx.currentTime + duration);
+          // Abaixar playlist para 20%
+          gainNodeRef.current.gain.linearRampToValueAtTime(0.20, ctx.currentTime + duration);
       }
-      if (ytPlayerRef.current?.setVolume) fadeYouTubeVolume(100, 15, duration * 1000);
+      if (ytPlayerRef.current?.setVolume) fadeYouTubeVolume(100, 20, duration * 1000);
   };
 
   const restoreVolume = (duration: number = 3.0) => {
@@ -556,7 +576,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
           gainNodeRef.current.gain.setValueAtTime(gainNodeRef.current.gain.value, ctx.currentTime);
           gainNodeRef.current.gain.linearRampToValueAtTime(1.2, ctx.currentTime + duration);
       }
-      if (ytPlayerRef.current?.setVolume) fadeYouTubeVolume(15, 100, duration * 1000);
+      if (ytPlayerRef.current?.setVolume) fadeYouTubeVolume(20, 100, duration * 1000);
   };
 
   const fadeYouTubeVolume = (startVol: number, endVol: number, durationMs: number) => {

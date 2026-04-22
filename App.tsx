@@ -29,12 +29,43 @@ const AppContent: React.FC = () => {
   const [authLoading, setAuthLoading] = useState(false);
   const [mode, setMode] = useState<AppMode>(AppMode.Home);
   
-  // Auth listener disabled for now
+  // Auth listener re-enabled
   useEffect(() => {
-    // Restaurando login automático ou local para facilitar sem Supabase
+    const supabase = getSupabase();
+    
+    // 1. Restaurar sessão local rápida
     const savedUser = localStorage.getItem('voxgen_user_v1');
     if (savedUser) {
         setUser(JSON.parse(savedUser));
+    }
+
+    // 2. Ouvir mudanças no Supabase (Google Login)
+    if (supabase) {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session?.user) {
+                const email = session.user.email || '';
+                const role: UserRole = (email === 'limadan389@gmail.com') ? 'admin' : 'user';
+                const newUser = { role, email };
+                setUser(newUser);
+                localStorage.setItem('voxgen_user_v1', JSON.stringify(newUser));
+            }
+        });
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            if (session?.user) {
+                const email = session.user.email || '';
+                const role: UserRole = (email === 'limadan389@gmail.com') ? 'admin' : 'user';
+                const newUser = { role, email };
+                setUser(newUser);
+                localStorage.setItem('voxgen_user_v1', JSON.stringify(newUser));
+                setMode(AppMode.Home);
+            } else if (_event === 'SIGNED_OUT') {
+                setUser(null);
+                localStorage.removeItem('voxgen_user_v1');
+            }
+        });
+
+        return () => subscription.unsubscribe();
     }
   }, []);
   const [selectedVoice, setSelectedVoice] = useState<VoiceName | string>(VoiceName.Kore);
@@ -80,7 +111,10 @@ const AppContent: React.FC = () => {
   };
 
   const handleLogout = async () => {
-    // await supabaseSignOut(); // Disabled
+    const supabase = getSupabase();
+    if (supabase) {
+        await supabaseSignOut();
+    }
     setUser(null);
     localStorage.removeItem('voxgen_user_v1');
     setMode(AppMode.Home);
