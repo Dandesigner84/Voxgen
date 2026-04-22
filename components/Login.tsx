@@ -25,7 +25,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       await signInWithGoogle();
       // Supabase redirect handles the rest, App.tsx listener will catch it
     } catch (err: any) {
-      setError('Erro ao iniciar login com Google: ' + err.message);
+      console.error('[Supabase Auth Error]', err);
+      if (err.message?.includes('provider is not enabled')) {
+        setError('Configuração Incompleta: O login via Google não foi ativado no painel do Supabase. Acesse Authentication > Providers no Supabase para ativar.');
+      } else {
+        setError('Erro ao iniciar login com Google: ' + (err.message || 'Erro desconhecido'));
+      }
       setLoading(false);
     }
   };
