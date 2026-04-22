@@ -55,7 +55,21 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(false);
   };
 
-  const isConfigMissing = !import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_URL === 'your-project-url.supabase.co';
+  const [showConfig, setShowConfig] = useState(false);
+  const [manualUrl, setManualUrl] = useState(localStorage.getItem('supabase_url_override') || '');
+  const [manualKey, setManualKey] = useState(localStorage.getItem('supabase_key_override') || '');
+
+  const saveManualConfig = () => {
+    if (manualUrl && manualKey) {
+        localStorage.setItem('supabase_url_override', manualUrl);
+        localStorage.setItem('supabase_key_override', manualKey);
+        window.location.reload(); // Recarrega para inicializar o cliente com novas chaves
+    } else {
+        setError('Preencha ambos os campos da configuração.');
+    }
+  };
+
+  const isConfigMissing = (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_URL === 'your-project-url.supabase.co') && !localStorage.getItem('supabase_url_override');
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0f172a] p-4 font-sans relative overflow-hidden">
@@ -73,15 +87,75 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   <p className="text-slate-400 text-sm">Crie narrações e clones de voz profissionais</p>
                 </div>
 
-                {isConfigMissing && (
+                {isConfigMissing && !showConfig && (
                     <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-left">
                         <div className="flex items-center gap-2 text-amber-500 font-bold text-xs mb-1">
                             <AlertCircle size={14} /> Configuração Pendente
                         </div>
-                        <p className="text-[10px] text-slate-400 leading-relaxed">
-                            As chaves do Supabase (VITE_SUPABASE_URL/ANON_KEY) não foram encontradas. 
-                            <b> Configure-as no painel da Vercel ou AI Studio</b> para habilitar o login.
+                        <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
+                            As chaves do Supabase não foram detectadas. Você pode configurá-las agora para habilitar o login com Google.
                         </p>
+                        <button 
+                            onClick={() => setShowConfig(true)}
+                            className="text-[10px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-500 font-bold py-1 px-3 rounded-lg transition-colors border border-amber-500/30"
+                        >
+                            Configurar Agora
+                        </button>
+                    </div>
+                )}
+
+                {showConfig && (
+                    <div className="mb-6 p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-left animate-in slide-in-from-top-2 duration-300">
+                        <h3 className="text-indigo-400 font-bold text-xs mb-3 flex items-center gap-2">
+                            <Key size={14} /> Configuração Manual Supabase
+                        </h3>
+                        <div className="space-y-3">
+                            <div>
+                                <label className="text-[9px] text-slate-500 uppercase font-bold ml-1">Project URL</label>
+                                <input 
+                                    type="text" 
+                                    value={manualUrl}
+                                    onChange={e => setManualUrl(e.target.value)}
+                                    placeholder="https://abc...supabase.co"
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2 px-3 text-xs text-white outline-none focus:border-indigo-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[9px] text-slate-500 uppercase font-bold ml-1">Anon Key (Public)</label>
+                                <input 
+                                    type="password" 
+                                    value={manualKey}
+                                    onChange={e => setManualKey(e.target.value)}
+                                    placeholder="eyJhbG..."
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2 px-3 text-xs text-white outline-none focus:border-indigo-500"
+                                />
+                            </div>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={saveManualConfig}
+                                    className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold py-2 rounded-lg transition-all"
+                                >
+                                    Salvar e Ativar
+                                </button>
+                                <button 
+                                    onClick={() => {
+                                        localStorage.removeItem('supabase_url_override');
+                                        localStorage.removeItem('supabase_key_override');
+                                        window.location.reload();
+                                    }}
+                                    className="bg-slate-800 hover:bg-slate-700 text-red-400 text-[10px] font-bold py-2 px-4 rounded-lg transition-all"
+                                    title="Limpar configurações salvas"
+                                >
+                                    Limpar
+                                </button>
+                                <button 
+                                    onClick={() => setShowConfig(false)}
+                                    className="bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] font-bold py-2 px-4 rounded-lg transition-all"
+                                >
+                                    Cancelar
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 )}
 

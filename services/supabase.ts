@@ -5,13 +5,10 @@ let supabaseClient: SupabaseClient | null = null;
 export const getSupabase = () => {
   if (supabaseClient) return supabaseClient;
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  const supabaseUrl = localStorage.getItem('supabase_url_override') || import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = localStorage.getItem('supabase_key_override') || import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    // Retornamos null ou lançamos um erro apenas quando for realmente usado
-    // Isso evita que a aplicação quebre logo no import
-    console.warn('Supabase configuration missing: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set in your environment variables.');
+  if (!supabaseUrl || !supabaseAnonKey || supabaseUrl === 'your-project-url.supabase.co') {
     return null;
   }
 

@@ -35,6 +35,8 @@ declare global {
   }
 }
 
+import { createTimerWorker } from '../utils/workerUtils';
+
 interface SmartPlayerProps {
   audioContext: AudioContext | null;
   initAudioContext: () => AudioContext;
@@ -71,6 +73,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
   const nextNarrationTimeRef = useRef<number>(0);
   const hasFadedOutRef = useRef<boolean>(false);
   const timerIntervalRef = useRef<number | null>(null);
+  const workerRef = useRef<Worker | null>(null);
   const narrationSourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const fadeIntervalRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -84,9 +87,37 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
   const currentTrack = playlist[currentTrackIndex];
 
   const isPlayingRef = useRef(isPlaying);
+  const isVignettePlayingRef = useRef(isVignettePlaying);
+  const intervalSecondsRef = useRef(intervalSeconds);
+
   useEffect(() => {
     isPlayingRef.current = isPlaying;
   }, [isPlaying]);
+
+  useEffect(() => {
+    isVignettePlayingRef.current = isVignettePlaying;
+  }, [isVignettePlaying]);
+
+  useEffect(() => {
+    const oldInterval = intervalSecondsRef.current;
+    intervalSecondsRef.current = intervalSeconds;
+    
+    // Se o novo intervalo for menor que o tempo restante, antecipa a próxima narração
+    const now = Date.now();
+    const remainingMs = nextNarrationTimeRef.current - now;
+    if (remainingMs > intervalSeconds * 1000) {
+        nextNarrationTimeRef.current = now + (intervalSeconds * 1000);
+        hasFadedOutRef.current = false;
+    }
+  }, [intervalSeconds]);
+
+  useEffect(() => {
+    if (isPlaying && !workerRef.current && !isVignettePlaying) {
+        startScheduler();
+    } else if (!isPlaying && workerRef.current) {
+        stopScheduler();
+    }
+  }, [isPlaying, isVignettePlaying]);
 
   useEffect(() => {
     const ctx = initAudioContext();
@@ -242,6 +273,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
 
           if (ctx.state === 'running') await ctx.suspend();
           pauseTrack();
+          stopScheduler();
           return;
       }
 
@@ -463,29 +495,79 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
       setPendingUploads([]);
   };
 
+  useEffect(() => {
+    // Media Session API for background media display
+    if ('mediaSession' in navigator && currentTrack) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentTrack.name,
+        artist: 'VoxGen AI Player',
+        album: 'Radio Studio',
+        artwork: [
+          { src: 'https://ais-pre-22xne2xutkbprprvr3s6kr-207718158227.us-east1.run.app/icon.svg', sizes: '512x512', type: 'image/svg+xml' }
+        ]
+      });
+
+      navigator.mediaSession.setActionHandler('play', handleMainPlay);
+      navigator.mediaSession.setActionHandler('pause', handleMainPlay);
+      navigator.mediaSession.setActionHandler('nexttrack', handleNextTrack);
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        if (currentTrackIndex > 0) setCurrentTrackIndex(prev => prev - 1);
+      });
+    }
+  }, [currentTrack]);
+
   const startScheduler = () => {
-      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-      if (nextNarrationTimeRef.current < Date.now()) {
-           nextNarrationTimeRef.current = Date.now() + (intervalSeconds * 1000);
+      if (workerRef.current) workerRef.current.terminate();
+      workerRef.current = createTimerWorker();
+      
+      const now = Date.now();
+      // Se o tempo da próxima narração for inválido ou já passou, define um novo
+      if (!nextNarrationTimeRef.current || nextNarrationTimeRef.current < now) {
+           nextNarrationTimeRef.current = now + (intervalSecondsRef.current * 1000);
            hasFadedOutRef.current = false;
       }
-      timerIntervalRef.current = window.setInterval(() => {
-          const now = Date.now();
-          const remainingMs = nextNarrationTimeRef.current - now;
+
+      workerRef.current.onmessage = () => {
+          const currentTime = Date.now();
+          const remainingMs = nextNarrationTimeRef.current - currentTime;
           const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
-          setNextNarrationTimeDisplay(remainingSec > 60 ? `${Math.floor(remainingSec/60)}m ${remainingSec%60}s` : `${remainingSec}s`);
           
-          if (remainingMs <= 3500 && remainingMs > 0 && !hasFadedOutRef.current && isPlaying && !isVignettePlaying) {
-               lowerVolume(3.0);
-               hasFadedOutRef.current = true;
+          setNextNarrationTimeDisplay(remainingSec > 60 
+            ? `${Math.floor(remainingSec/60)}m ${remainingSec%60}s` 
+            : `${remainingSec}s`
+          );
+          
+          // Só processa ducking e play se estiver tocando e não estiver em vinheta
+          if (isPlayingRef.current && !isVignettePlayingRef.current) {
+              if (remainingMs <= 3500 && remainingMs > 0 && !hasFadedOutRef.current) {
+                   lowerVolume(3.0);
+                   hasFadedOutRef.current = true;
+              }
+              
+              if (currentTime >= nextNarrationTimeRef.current && !isNarratingRef.current) {
+                  playNarration();
+              }
+
+              // Watchdog: Se por algum motivo o tempo passou de 10 segundos da narração e nada aconteceu
+              // Reinicia o ciclo para não ficar travado em 0s
+              if (currentTime > nextNarrationTimeRef.current + 10000 && !isNarratingRef.current) {
+                  console.warn("[SmartPlayer] Watchdog: Narração atrasada, reiniciando timer.");
+                  nextNarrationTimeRef.current = currentTime + (intervalSecondsRef.current * 1000);
+                  hasFadedOutRef.current = false;
+              }
           }
-          if (now >= nextNarrationTimeRef.current && !isNarratingRef.current && !isVignettePlaying) {
-              playNarration();
-          }
-      }, 500);
+      };
+
+      workerRef.current.postMessage({ action: 'start', ms: 500 });
   };
 
-  const stopScheduler = () => { if (timerIntervalRef.current) clearInterval(timerIntervalRef.current); };
+  const stopScheduler = () => { 
+    if (workerRef.current) {
+        workerRef.current.postMessage({ action: 'stop' });
+        workerRef.current.terminate();
+        workerRef.current = null;
+    }
+  };
 
   const playNarration = () => {
       const ctx = initAudioContext(); 
@@ -494,10 +576,20 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
           buffer = vignetteBufferRef.current;
           narrationsSinceVignetteRef.current = 0;
       } else {
-          const availableIds = selectedNarrationIds.filter(id => 
+          // Fallback: If no selected narrations match history, use ANY available narration
+          let targetIds = selectedNarrationIds;
+          let availableIds = targetIds.filter(id => 
             narrationHistory.some(n => n.id === id) || 
             uploadedNarrations.some(u => u.id === id)
           );
+
+          if (availableIds.length === 0) {
+            // Pick everything available as a recovery mechanism
+            availableIds = [
+                ...narrationHistory.map(n => n.id),
+                ...uploadedNarrations.map(u => u.id)
+            ];
+          }
           
           if (availableIds.length > 0) {
               const randomId = availableIds[Math.floor(Math.random() * availableIds.length)];
@@ -512,7 +604,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
           }
       }
       if (!buffer) {
-          nextNarrationTimeRef.current = Date.now() + (intervalSeconds * 1000);
+          nextNarrationTimeRef.current = Date.now() + (intervalSecondsRef.current * 1000);
           hasFadedOutRef.current = false;
           restoreVolume(1.0);
           return;
@@ -550,10 +642,21 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
           isNarratingRef.current = false;
           setIsNarratingUI(false); 
           restoreVolume(3.0);
-          nextNarrationTimeRef.current = Date.now() + (intervalSeconds * 1000);
+          nextNarrationTimeRef.current = Date.now() + (intervalSecondsRef.current * 1000);
           hasFadedOutRef.current = false;
+          // Worker já está rodando e vai pegar o novo tempo
       };
-      source.start(0);
+      
+      try {
+          source.start(0);
+      } catch (e) {
+          console.error("[SmartPlayer] Erro ao iniciar narração:", e);
+          isNarratingRef.current = false;
+          setIsNarratingUI(false);
+          restoreVolume(1.0);
+          nextNarrationTimeRef.current = Date.now() + (intervalSecondsRef.current * 1000);
+          hasFadedOutRef.current = false;
+      }
   };
 
   const lowerVolume = (duration: number = 3.0) => {
