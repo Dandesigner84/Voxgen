@@ -81,10 +81,15 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
 
   const { isIOS } = usePlatformDetection();
   const isPremium = isSmartPlayerUnlocked();
+  const isSmartEqEnabledRef = useRef(isSmartEqEnabled);
   const isCorpAdmin = userRole === 'corporate-admin';
   const isCorpUser = userRole === 'corporate-user';
   const isCorporateMode = isCorpAdmin || isCorpUser;
   const currentTrack = playlist[currentTrackIndex];
+
+  useEffect(() => {
+    isSmartEqEnabledRef.current = isSmartEqEnabled;
+  }, [isSmartEqEnabled]);
 
   const isPlayingRef = useRef(isPlaying);
   const isVignettePlayingRef = useRef(isVignettePlaying);
@@ -611,16 +616,17 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
       }
       isNarratingRef.current = true;
       setIsNarratingUI(true); 
+      console.log("[SmartPlayer] Iniciando narração, abaixando volume...");
       if (!hasFadedOutRef.current) lowerVolume(0.5);
       
       const source = ctx.createBufferSource();
       source.buffer = buffer;
       const voiceGain = ctx.createGain();
       
-      // Aumentar narração em 15% (1.2 * 1.15 = 1.38)
-      voiceGain.gain.value = isSmartEqEnabled ? 1.4 : 1.0; 
+      // Aumentar narração para destaque
+      voiceGain.gain.value = isSmartEqEnabledRef.current ? 1.6 : 1.0; 
 
-      if (isSmartEqEnabled) {
+      if (isSmartEqEnabledRef.current) {
           // Efeito Stereo Widening (Haas Effect)
           const splitter = ctx.createChannelSplitter(2);
           const merger = ctx.createChannelMerger(2);
@@ -660,26 +666,32 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
   };
 
   const lowerVolume = (duration: number = 3.0) => {
-      if (!isSmartEqEnabled) return;
+      if (!isSmartEqEnabledRef.current) return;
       const ctx = initAudioContext();
       if (gainNodeRef.current) {
           gainNodeRef.current.gain.cancelScheduledValues(ctx.currentTime);
           gainNodeRef.current.gain.setValueAtTime(gainNodeRef.current.gain.value, ctx.currentTime);
-          // Abaixar playlist para 20%
-          gainNodeRef.current.gain.linearRampToValueAtTime(0.20, ctx.currentTime + duration);
+          // Abaixar playlist para 15% (ainda mais destaque)
+          gainNodeRef.current.gain.linearRampToValueAtTime(0.15, ctx.currentTime + duration);
       }
-      if (ytPlayerRef.current?.setVolume) fadeYouTubeVolume(100, 20, duration * 1000);
+      if (ytPlayerRef.current && typeof ytPlayerRef.current.getVolume === 'function') {
+          const currentVol = ytPlayerRef.current.getVolume();
+          fadeYouTubeVolume(currentVol, 15, duration * 1000);
+      }
   };
 
   const restoreVolume = (duration: number = 3.0) => {
-      if (!isSmartEqEnabled) return;
+      if (!isSmartEqEnabledRef.current) return;
       const ctx = initAudioContext();
       if (gainNodeRef.current) {
           gainNodeRef.current.gain.cancelScheduledValues(ctx.currentTime);
           gainNodeRef.current.gain.setValueAtTime(gainNodeRef.current.gain.value, ctx.currentTime);
           gainNodeRef.current.gain.linearRampToValueAtTime(1.2, ctx.currentTime + duration);
       }
-      if (ytPlayerRef.current?.setVolume) fadeYouTubeVolume(20, 100, duration * 1000);
+      if (ytPlayerRef.current && typeof ytPlayerRef.current.getVolume === 'function') {
+          const currentVol = ytPlayerRef.current.getVolume();
+          fadeYouTubeVolume(currentVol, 100, duration * 1000);
+      }
   };
 
   const fadeYouTubeVolume = (startVol: number, endVol: number, durationMs: number) => {
