@@ -358,7 +358,10 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
       if (track.type === 'file') {
           if (audioElRef.current) {
               if (audioElRef.current.src !== track.src) audioElRef.current.src = track.src;
-              if (gainNodeRef.current) gainNodeRef.current.gain.value = 1.2;
+              if (gainNodeRef.current) {
+                  // Respeita se houver uma narração em curso
+                  gainNodeRef.current.gain.value = isNarratingRef.current ? 0.15 : 1.2;
+              }
               
               audioElRef.current.onerror = () => {
                   console.error("Erro no arquivo de áudio, pulando...");
@@ -389,7 +392,9 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
                        const state = player.getPlayerState?.();
                        if (state !== 1) player.playVideo();
                    }
-                   if (player.setVolume) player.setVolume(100);
+                   if (player.setVolume) {
+                       player.setVolume(isNarratingRef.current ? 15 : 100);
+                   }
                    if (player.unMute) player.unMute();
                } catch(e) {
                    console.error("Erro ao reproduzir YouTube", e);
@@ -644,13 +649,14 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
 
       voiceGain.connect(ctx.destination);
       narrationSourceNodeRef.current = source;
+      
       source.onended = () => {
+          console.log("[SmartPlayer] Narração finalizada. Restaurando volume...");
           isNarratingRef.current = false;
           setIsNarratingUI(false); 
-          restoreVolume(3.0);
+          restoreVolume(2.5); // Restaura um pouco mais rápido
           nextNarrationTimeRef.current = Date.now() + (intervalSecondsRef.current * 1000);
           hasFadedOutRef.current = false;
-          // Worker já está rodando e vai pegar o novo tempo
       };
       
       try {
@@ -668,10 +674,11 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
   const lowerVolume = (duration: number = 3.0) => {
       if (!isSmartEqEnabledRef.current) return;
       const ctx = initAudioContext();
+      console.log(`[SmartPlayer] Ducking: baixando playlist para 15% em ${duration}s`);
+      
       if (gainNodeRef.current) {
           gainNodeRef.current.gain.cancelScheduledValues(ctx.currentTime);
           gainNodeRef.current.gain.setValueAtTime(gainNodeRef.current.gain.value, ctx.currentTime);
-          // Abaixar playlist para 15% (ainda mais destaque)
           gainNodeRef.current.gain.linearRampToValueAtTime(0.15, ctx.currentTime + duration);
       }
       if (ytPlayerRef.current && typeof ytPlayerRef.current.getVolume === 'function') {
@@ -680,9 +687,11 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
       }
   };
 
-  const restoreVolume = (duration: number = 3.0) => {
+  const restoreVolume = (duration: number = 2.5) => {
       if (!isSmartEqEnabledRef.current) return;
       const ctx = initAudioContext();
+      console.log(`[SmartPlayer] Ducking: restaurando playlist para 100% em ${duration}s`);
+      
       if (gainNodeRef.current) {
           gainNodeRef.current.gain.cancelScheduledValues(ctx.currentTime);
           gainNodeRef.current.gain.setValueAtTime(gainNodeRef.current.gain.value, ctx.currentTime);
