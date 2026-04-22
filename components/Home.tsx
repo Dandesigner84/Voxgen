@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Mic, Music, Radio, Crown, Check, BookOpen, ShieldCheck, Volume2, Mic2, Users, Gift, Star, Sparkles } from 'lucide-react';
 import { AppMode } from '../types';
 import { getUserStatus, redeemCode, getFormatExpiryDate } from '../services/monetizationService';
+import BluetoothConnect from './BluetoothConnect';
 
 interface HomeProps {
   onSelectMode: (mode: AppMode) => void;
@@ -86,6 +87,10 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole }) => {
             )}
             {redeemMsg && <p className={`text-[10px] mt-2 ${redeemMsg.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>{redeemMsg.text}</p>}
         </div>
+      </div>
+      
+      <div className="w-full max-w-4xl mb-12">
+        <BluetoothConnect />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl w-full">

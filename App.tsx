@@ -22,11 +22,45 @@ import { refineText, generateSpeech, addAutomaticSFX } from './services/geminiSe
 import { decodeAudioData, addBackgroundMusic } from './utils/audioUtils';
 import { canGenerateNarration, incrementUsage } from './services/monetizationService';
 
+import { getSupabase, signOut as supabaseSignOut } from './services/supabase';
+
 const AppContent: React.FC = () => {
   const [user, setUser] = useState<UserSession | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [mode, setMode] = useState<AppMode>(AppMode.Home);
   
-  const [text, setText] = useState(DEFAULT_TEXT);
+  // Auth listener
+  useEffect(() => {
+    const supabase = getSupabase();
+    if (!supabase) {
+      setAuthLoading(false);
+      return;
+    }
+
+    // Check active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        const email = session.user.email || '';
+        const role: UserRole = (email === 'limadan389@gmail.com') ? 'admin' : 'user';
+        setUser({ email, role });
+      }
+      setAuthLoading(false);
+    });
+
+    // Listen for changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        const email = session.user.email || '';
+        const role: UserRole = (email === 'limadan389@gmail.com') ? 'admin' : 'user';
+        setUser({ email, role });
+      } else {
+        setUser(null);
+        setMode(AppMode.Home);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
   const [selectedVoice, setSelectedVoice] = useState<VoiceName | string>(VoiceName.Kore);
   const [selectedTone, setSelectedTone] = useState<ToneType | string>(ToneType.Neutral);
   const [useMusic, setUseMusic] = useState(false);
@@ -66,7 +100,8 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabaseSignOut();
     setUser(null);
     setMode(AppMode.Home);
   };
@@ -237,6 +272,14 @@ const AppContent: React.FC = () => {
       alert("FALHA NA GERAÇÃO: " + msg);
     } finally { setProcessing(prev => ({ ...prev, isEnhancing: false, isGeneratingAudio: false })); }
   };
+
+  if (authLoading) {
+    return (
+        <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
+            <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
+        </div>
+    );
+  }
 
   if (!user) return <Login onLogin={handleLogin} />;
 
