@@ -26,40 +26,16 @@ import { getSupabase, signOut as supabaseSignOut } from './services/supabase';
 
 const AppContent: React.FC = () => {
   const [user, setUser] = useState<UserSession | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(false);
   const [mode, setMode] = useState<AppMode>(AppMode.Home);
   
-  // Auth listener
+  // Auth listener disabled for now
   useEffect(() => {
-    const supabase = getSupabase();
-    if (!supabase) {
-      setAuthLoading(false);
-      return;
+    // Restaurando login automático ou local para facilitar sem Supabase
+    const savedUser = localStorage.getItem('voxgen_user_v1');
+    if (savedUser) {
+        setUser(JSON.parse(savedUser));
     }
-
-    // Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        const email = session.user.email || '';
-        const role: UserRole = (email === 'limadan389@gmail.com') ? 'admin' : 'user';
-        setUser({ email, role });
-      }
-      setAuthLoading(false);
-    });
-
-    // Listen for changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        const email = session.user.email || '';
-        const role: UserRole = (email === 'limadan389@gmail.com') ? 'admin' : 'user';
-        setUser({ email, role });
-      } else {
-        setUser(null);
-        setMode(AppMode.Home);
-      }
-    });
-
-    return () => subscription.unsubscribe();
   }, []);
   const [selectedVoice, setSelectedVoice] = useState<VoiceName | string>(VoiceName.Kore);
   const [selectedTone, setSelectedTone] = useState<ToneType | string>(ToneType.Neutral);
@@ -92,7 +68,9 @@ const AppContent: React.FC = () => {
   }, []);
 
   const handleLogin = (role: UserRole, email: string) => {
-    setUser({ role, email });
+    const newUser = { role, email };
+    setUser(newUser);
+    localStorage.setItem('voxgen_user_v1', JSON.stringify(newUser));
     if (role === 'admin' || email === 'limadan389@gmail.com') {
         setMode(AppMode.Admin);
     } else {
@@ -101,8 +79,9 @@ const AppContent: React.FC = () => {
   };
 
   const handleLogout = async () => {
-    await supabaseSignOut();
+    // await supabaseSignOut(); // Disabled
     setUser(null);
+    localStorage.removeItem('voxgen_user_v1');
     setMode(AppMode.Home);
   };
 

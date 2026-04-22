@@ -37,7 +37,22 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('Login manual desativado. Use o Google.');
+    if (!email || !password) {
+        setError('Preencha email e senha.');
+        return;
+    }
+    setLoading(true);
+    setError('');
+    
+    // Hardcoded simple auth for demo/bypass
+    await new Promise(r => setTimeout(r, 800));
+    if (email === "limadan389@gmail.com" && password === "147025") {
+        onLogin('admin', email);
+    } else {
+        // Just let anyone in for now since we are bypassing Supabase
+        onLogin('user', email);
+    }
+    setLoading(false);
   };
 
   const isConfigMissing = !import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_URL === 'your-project-url.supabase.co';
@@ -90,6 +105,26 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                             </>
                         )}
                     </button>
+
+                    <div className="relative flex py-4 items-center">
+                        <div className="flex-grow border-t border-slate-800"></div>
+                        <span className="flex-shrink-0 mx-4 text-slate-600 text-[10px] uppercase font-bold tracking-widest text-center">Ou E-mail</span>
+                        <div className="flex-grow border-t border-slate-800"></div>
+                    </div>
+
+                    <form onSubmit={handleLoginSubmit} className="space-y-4">
+                        <div className="relative">
+                            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="w-full bg-slate-800 border border-slate-700 rounded-xl py-3 pl-11 pr-4 text-white outline-none focus:border-indigo-500 transition-colors" />
+                        </div>
+                        <div className="relative">
+                            <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Senha" className="w-full bg-slate-800 border border-slate-700 rounded-xl py-3 pl-11 pr-4 text-white outline-none focus:border-indigo-500 transition-colors" />
+                        </div>
+                        <button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2">
+                             {loading ? <Loader2 className="animate-spin" /> : <>Entrar <ArrowRight size={18} /></>}
+                        </button>
+                    </form>
 
                     <div className="relative flex py-4 items-center">
                         <div className="flex-grow border-t border-slate-800"></div>

@@ -599,6 +599,59 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
       setSelectedNarrationIds(prev => prev.filter(sid => sid !== id));
   };
 
+  const [isRecordingMic, setIsRecordingMic] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+
+  const startRecording = async () => {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mediaRecorder = new MediaRecorder(stream);
+        recordedChunksRef.current = [];
+        
+        mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) recordedChunksRef.current.push(e.data);
+        };
+        
+        mediaRecorder.onstop = async () => {
+            const blob = new Blob(recordedChunksRef.current, { type: 'audio/webm' });
+            const arrayBuffer = await blob.arrayBuffer();
+            const ctx = initAudioContext();
+            try {
+                const buffer = await ctx.decodeAudioData(arrayBuffer);
+                const newNarration: UploadedNarrationFile = {
+                    id: crypto.randomUUID(),
+                    name: `Gravação ${new Date().toLocaleTimeString()}`,
+                    buffer: buffer
+                };
+                setUploadedNarrations(prev => [...prev, newNarration]);
+                setSelectedNarrationIds(prev => [...prev, newNarration.id]);
+                setNarrationSource('upload');
+            } catch (err) {
+                console.error("Erro ao processar gravação", err);
+                alert("Erro ao processar o áudio gravado.");
+            }
+            
+            // Stop all tracks in stream
+            stream.getTracks().forEach(track => track.stop());
+        };
+        
+        mediaRecorderRef.current = mediaRecorder;
+        mediaRecorder.start();
+        setIsRecordingMic(true);
+    } catch (err) {
+        console.error("Microfone não acessível", err);
+        alert("Não foi possível acessar o microfone.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecordingMic) {
+        mediaRecorderRef.current.stop();
+        setIsRecordingMic(false);
+    }
+  };
+
   const triggerUpload = () => {
     if (fileInputRef.current) fileInputRef.current.click();
   };
@@ -744,9 +797,18 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
                  {isCorpUser && !isPremium && <div className="absolute inset-0 z-10 bg-slate-900/80 backdrop-blur-[1px] flex flex-col items-center justify-center rounded-2xl border border-indigo-500/30"><Lock className="text-indigo-400 mb-2" size={32} /><p className="text-indigo-200 font-bold">Narração Bloqueada</p></div>}
                  <div className="flex justify-between items-center mb-4">
                      <h4 className="text-white font-bold flex items-center gap-2"><Mic2 size={18} className="text-cyan-400" /> Narração</h4>
-                     <button onClick={triggerUpload} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-cyan-400 transition-colors flex items-center gap-2 text-xs font-bold border border-slate-700">
-                         <CloudUpload size={16} /> Upload
-                     </button>
+                     <div className="flex gap-2">
+                       <button 
+                           onClick={isRecordingMic ? stopRecording : startRecording} 
+                           className={`p-2 rounded-lg transition-all flex items-center gap-2 text-xs font-bold border ${isRecordingMic ? 'bg-red-500/20 text-red-500 border-red-500/50 animate-pulse' : 'bg-slate-800 hover:bg-slate-700 text-cyan-400 border-slate-700'}`}
+                       >
+                           {isRecordingMic ? <Square size={16} fill="currentColor" /> : <Mic2 size={16} />}
+                           {isRecordingMic ? 'Parar' : 'Gravar'}
+                       </button>
+                       <button onClick={triggerUpload} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-cyan-400 transition-colors flex items-center gap-2 text-xs font-bold border border-slate-700">
+                           <CloudUpload size={16} /> Upload
+                       </button>
+                     </div>
                  </div>
                  <div className="flex bg-slate-800 p-1 rounded-lg mb-6">
                      <button onClick={() => setNarrationSource('history')} className={`flex-1 py-2 text-xs font-bold rounded-md ${narrationSource === 'history' ? 'bg-cyan-600 text-white shadow-lg' : 'text-slate-400'}`}>Histórico</button>
