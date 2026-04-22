@@ -35,7 +35,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setError('Login manual desativado. Use o Google.');
   };
 
-  const isConfigMissing = !import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY;
+  const isConfigMissing = !import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_URL === 'your-project-url.supabase.co';
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0f172a] p-4 font-sans relative overflow-hidden">
@@ -44,22 +44,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
       <div className="w-full max-w-md bg-slate-900/90 border border-slate-800 backdrop-blur-xl rounded-3xl shadow-2xl p-8 relative z-10 animate-fade-in text-center">
         
-        {isConfigMissing ? (
-            <div className="space-y-6">
-                <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto border border-amber-500/20">
-                    <AlertCircle className="text-amber-500" size={32} />
-                </div>
-                <h2 className="text-xl font-bold text-white">Configuração Necessária</h2>
-                <div className="text-sm text-slate-400 space-y-3 leading-relaxed">
-                    <p>Para habilitar o login, você precisa configurar as variáveis de ambiente do Supabase.</p>
-                    <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 text-left font-mono text-[10px] space-y-1">
-                        <p className="text-indigo-400">VITE_SUPABASE_URL</p>
-                        <p className="text-indigo-400">VITE_SUPABASE_ANON_KEY</p>
-                    </div>
-                    <p>Adicione estas chaves nas <b>Configurações (Settings)</b> do projeto no AI Studio.</p>
-                </div>
-            </div>
-        ) : step === 'login' && (
+        {step === 'login' && (
             <>
                 <div className="text-center mb-8">
                   <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-400 tracking-tight mb-2">
@@ -68,11 +53,23 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   <p className="text-slate-400 text-sm">Crie narrações e clones de voz profissionais</p>
                 </div>
 
+                {isConfigMissing && (
+                    <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-left">
+                        <div className="flex items-center gap-2 text-amber-500 font-bold text-xs mb-1">
+                            <AlertCircle size={14} /> Configuração Pendente
+                        </div>
+                        <p className="text-[10px] text-slate-400 leading-relaxed">
+                            As chaves do Supabase (VITE_SUPABASE_URL/ANON_KEY) não foram encontradas. 
+                            <b> Configure-as no painel da Vercel ou AI Studio</b> para habilitar o login.
+                        </p>
+                    </div>
+                )}
+
                 <div className="space-y-4">
                     <button 
                         onClick={handleGoogleLogin}
-                        disabled={loading}
-                        className="w-full bg-white hover:bg-slate-50 text-slate-900 font-bold py-3.5 rounded-xl transition-all shadow-lg flex items-center justify-center gap-3 border border-slate-200"
+                        disabled={loading || isConfigMissing}
+                        className={`w-full font-bold py-3.5 rounded-xl transition-all shadow-lg flex items-center justify-center gap-3 border ${isConfigMissing ? 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed' : 'bg-white hover:bg-slate-50 text-slate-900 border-slate-200'}`}
                     >
                         {loading ? (
                             <Loader2 className="animate-spin text-indigo-500" />
