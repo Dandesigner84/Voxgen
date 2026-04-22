@@ -38,6 +38,7 @@ const AppContent: React.FC = () => {
     }
   }, []);
   const [selectedVoice, setSelectedVoice] = useState<VoiceName | string>(VoiceName.Kore);
+  const [text, setText] = useState(DEFAULT_TEXT);
   const [selectedTone, setSelectedTone] = useState<ToneType | string>(ToneType.Neutral);
   const [useMusic, setUseMusic] = useState(false);
   const [history, setHistory] = useState<AudioItem[]>([]);

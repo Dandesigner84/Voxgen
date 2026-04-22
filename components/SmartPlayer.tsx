@@ -250,7 +250,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
       // Lógica de Vinheta Aleatória no Início ou sequência
       const shouldPlayVignette = Math.random() > 0.7 || !hasPlayedVignetteRef.current;
       
-      if (shouldPlayVignette && vignetteBufferRef.current) {
+      if (shouldPlayVignette) {
           playVignette();
       } else {
           setIsPlaying(true);
@@ -259,19 +259,33 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
       }
   };
 
-  const playVignette = () => {
-      if (!vignetteBufferRef.current) { 
-          setIsPlaying(true); 
-          if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
-          return; 
+  const playVignette = async () => {
+      const ctx = initAudioContext();
+      
+      // Se não temos a vinheta carregada, tentamos carregar agora
+      if (!vignetteBufferRef.current) {
+          console.log("[SmartPlayer] Vinheta não encontrada em cache. Tentando carregar...");
+          try {
+              const base64 = await generateSpeech(VIGNETTE_TEXT, 'Kore');
+              const buffer = await decodeAudioData(base64, ctx);
+              vignetteBufferRef.current = buffer;
+          } catch (e) {
+              console.error("[SmartPlayer] Falha ao carregar vinheta sob demanda", e);
+              setIsPlaying(true); 
+              if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
+              return;
+          }
       }
+
+      console.log("[SmartPlayer] Iniciando reprodução da vinheta...");
       setIsPlaying(true);
       setIsVignettePlaying(true);
-      const ctx = initAudioContext();
+      
       const source = ctx.createBufferSource();
       source.buffer = vignetteBufferRef.current;
       source.connect(ctx.destination);
       source.onended = () => {
+          console.log("[SmartPlayer] Vinheta finalizada.");
           setIsVignettePlaying(false);
           hasPlayedVignetteRef.current = true;
           if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
@@ -281,7 +295,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
       try {
         source.start(0);
       } catch(e) {
-        console.error("Vignette playback failed", e);
+        console.error("[SmartPlayer] Erro fatal na reprodução da vinheta", e);
         setIsVignettePlaying(false);
         if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
       }
@@ -357,7 +371,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
 
       // Sorteia vinheta aleatória entre faixas (20% de chance)
       const shouldPlayVignette = Math.random() > 0.8;
-      if (shouldPlayVignette && vignetteBufferRef.current && !isVignettePlaying) {
+      if (shouldPlayVignette && !isVignettePlaying) {
           playVignette();
           return;
       }
