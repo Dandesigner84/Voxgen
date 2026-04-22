@@ -257,18 +257,14 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
       }
     }, [isYtReady, isPlaying, currentTrackIndex, isVignettePlaying]);
 
-  const handleMainPlay = async () => {
+  const handleMainPlay = () => {
       const ctx = initAudioContext();
 
       if (isPlaying) {
           setIsPlaying(false);
           
           if (narrationSourceNodeRef.current) {
-              try {
-                  narrationSourceNodeRef.current.stop();
-              } catch (e) {
-                  console.warn("Erro ao parar narração:", e);
-              }
+              try { narrationSourceNodeRef.current.stop(); } catch (e) {}
               narrationSourceNodeRef.current = null;
           }
           isNarratingRef.current = false;
@@ -276,18 +272,18 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
           
           restoreVolume(0.1);
 
-          if (ctx.state === 'running') await ctx.suspend();
+          if (ctx.state === 'running') ctx.suspend();
           pauseTrack();
           stopScheduler();
           return;
       }
 
-      if (ctx.state === 'suspended') await ctx.resume();
+      if (ctx.state === 'suspended') ctx.resume();
 
-      // Lógica de Vinheta Aleatória no Início ou sequência
-      const shouldPlayVignette = Math.random() > 0.7 || !hasPlayedVignetteRef.current;
+      // Lógica de Vinheta Aleatória: Só toca se o buffer já estiver pronto para evitar delay no Play
+      const shouldPlayVignette = (Math.random() > 0.7 || !hasPlayedVignetteRef.current) && vignetteBufferRef.current;
       
-      if (shouldPlayVignette) {
+      if (shouldPlayVignette && vignetteBufferRef.current) {
           playVignette();
       } else {
           setIsPlaying(true);
@@ -360,7 +356,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
               if (audioElRef.current.src !== track.src) audioElRef.current.src = track.src;
               if (gainNodeRef.current) {
                   // Respeita se houver uma narração em curso
-                  gainNodeRef.current.gain.value = isNarratingRef.current ? 0.15 : 1.2;
+                  gainNodeRef.current.gain.value = isNarratingRef.current ? 0.08 : 1.2;
               }
               
               audioElRef.current.onerror = () => {
@@ -393,7 +389,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
                        if (state !== 1) player.playVideo();
                    }
                    if (player.setVolume) {
-                       player.setVolume(isNarratingRef.current ? 15 : 100);
+                       player.setVolume(isNarratingRef.current ? 8 : 100);
                    }
                    if (player.unMute) player.unMute();
                } catch(e) {
@@ -628,8 +624,8 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
       source.buffer = buffer;
       const voiceGain = ctx.createGain();
       
-      // Aumentar narração para destaque
-      voiceGain.gain.value = isSmartEqEnabledRef.current ? 1.6 : 1.0; 
+      // Aumentar narração para destaque máximo
+      voiceGain.gain.value = isSmartEqEnabledRef.current ? 1.8 : 1.0; 
 
       if (isSmartEqEnabledRef.current) {
           // Efeito Stereo Widening (Haas Effect)
@@ -674,16 +670,16 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
   const lowerVolume = (duration: number = 3.0) => {
       if (!isSmartEqEnabledRef.current) return;
       const ctx = initAudioContext();
-      console.log(`[SmartPlayer] Ducking: baixando playlist para 15% em ${duration}s`);
+      console.log(`[SmartPlayer] Ducking: baixando playlist para 8% em ${duration}s`);
       
       if (gainNodeRef.current) {
           gainNodeRef.current.gain.cancelScheduledValues(ctx.currentTime);
           gainNodeRef.current.gain.setValueAtTime(gainNodeRef.current.gain.value, ctx.currentTime);
-          gainNodeRef.current.gain.linearRampToValueAtTime(0.15, ctx.currentTime + duration);
+          gainNodeRef.current.gain.linearRampToValueAtTime(0.08, ctx.currentTime + duration);
       }
       if (ytPlayerRef.current && typeof ytPlayerRef.current.getVolume === 'function') {
           const currentVol = ytPlayerRef.current.getVolume();
-          fadeYouTubeVolume(currentVol, 15, duration * 1000);
+          fadeYouTubeVolume(currentVol, 8, duration * 1000);
       }
   };
 
