@@ -5,7 +5,7 @@ service cloud.firestore {
     // Global Safety Net
     match /{document=**} {
       allow read, write: if false;
-    }
+    } 
 
     // --- Helpers ---
     function isSignedIn() { return request.auth != null; }
