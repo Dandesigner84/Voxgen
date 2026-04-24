@@ -153,7 +153,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ userRole = 'admin', userEmail }
                                     <code className="text-xl font-mono font-bold text-indigo-400 bg-slate-950 px-3 py-1 rounded-lg border border-indigo-900/50">{code.code}</code>
                                     <div className="hidden sm:block">
                                         <p className="text-xs text-white font-bold">{code.days} Dias de Acesso</p>
-                                        <p className="text-[10px] text-slate-500 italic">{code.isRedeemed ? 'Resgatado' : 'Aguardando uso'}</p>
+                                        <p className={`text-[10px] font-bold ${code.isRedeemed ? 'text-green-500' : 'text-slate-500 italic'}`}>
+                                            {code.isRedeemed ? `Resgatado por: ${code.redeemedBy || 'Usuário'}` : 'Aguardando uso'}
+                                        </p>
                                     </div>
                                 </div>
                                 <div className="flex gap-2">

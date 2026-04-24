@@ -80,6 +80,7 @@ export interface PremiumCode {
   isRedeemed: boolean;
   createdAt: number;
   redeemedAt?: number;
+  redeemedBy?: string;
 }
 
 export interface UserStatus {

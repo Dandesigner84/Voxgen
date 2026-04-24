@@ -280,13 +280,14 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
 
       if (ctx.state === 'suspended') ctx.resume();
 
-      // Lógica de Vinheta Aleatória: Só toca se o buffer já estiver pronto para evitar delay no Play
-      const shouldPlayVignette = (Math.random() > 0.7 || !hasPlayedVignetteRef.current) && vignetteBufferRef.current;
+      setIsPlaying(true);
+
+      // Lógica de Vinheta Aleatória: Tenta tocar se for a primeira vez ou random 30%
+      const shouldPlayVignette = (Math.random() > 0.7 || !hasPlayedVignetteRef.current);
       
-      if (shouldPlayVignette && vignetteBufferRef.current) {
+      if (shouldPlayVignette) {
           playVignette();
       } else {
-          setIsPlaying(true);
           if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
           startScheduler();
       }
@@ -304,14 +305,13 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
               vignetteBufferRef.current = buffer;
           } catch (e) {
               console.error("[SmartPlayer] Falha ao carregar vinheta sob demanda", e);
-              setIsPlaying(true); 
               if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
+              startScheduler();
               return;
           }
       }
 
       console.log("[SmartPlayer] Iniciando reprodução da vinheta...");
-      setIsPlaying(true);
       setIsVignettePlaying(true);
       
       const source = ctx.createBufferSource();
@@ -356,7 +356,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
               if (audioElRef.current.src !== track.src) audioElRef.current.src = track.src;
               if (gainNodeRef.current) {
                   // Respeita se houver uma narração em curso
-                  gainNodeRef.current.gain.value = isNarratingRef.current ? 0.08 : 1.2;
+                  gainNodeRef.current.gain.value = isNarratingRef.current ? 0.04 : 1.2;
               }
               
               audioElRef.current.onerror = () => {
@@ -389,7 +389,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
                        if (state !== 1) player.playVideo();
                    }
                    if (player.setVolume) {
-                       player.setVolume(isNarratingRef.current ? 8 : 100);
+                       player.setVolume(isNarratingRef.current ? 4 : 100);
                    }
                    if (player.unMute) player.unMute();
                } catch(e) {
@@ -670,16 +670,16 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
   const lowerVolume = (duration: number = 3.0) => {
       if (!isSmartEqEnabledRef.current) return;
       const ctx = initAudioContext();
-      console.log(`[SmartPlayer] Ducking: baixando playlist para 8% em ${duration}s`);
+      console.log(`[SmartPlayer] Ducking: baixando playlist para 4% em ${duration}s`);
       
       if (gainNodeRef.current) {
           gainNodeRef.current.gain.cancelScheduledValues(ctx.currentTime);
           gainNodeRef.current.gain.setValueAtTime(gainNodeRef.current.gain.value, ctx.currentTime);
-          gainNodeRef.current.gain.linearRampToValueAtTime(0.08, ctx.currentTime + duration);
+          gainNodeRef.current.gain.linearRampToValueAtTime(0.04, ctx.currentTime + duration);
       }
       if (ytPlayerRef.current && typeof ytPlayerRef.current.getVolume === 'function') {
           const currentVol = ytPlayerRef.current.getVolume();
-          fadeYouTubeVolume(currentVol, 8, duration * 1000);
+          fadeYouTubeVolume(currentVol, 4, duration * 1000);
       }
   };
 

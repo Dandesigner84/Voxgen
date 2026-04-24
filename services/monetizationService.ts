@@ -62,7 +62,7 @@ export const getUserStatus = (): UserStatus => {
   };
 };
 
-export const redeemCode = (codeStr: string): { success: boolean; message: string; days?: number } => {
+export const redeemCode = (codeStr: string, userEmail: string): { success: boolean; message: string; days?: number } => {
   const codes = getStoredCodes();
   const codeIndex = codes.findIndex(c => c.code === codeStr && !c.isRedeemed);
 
@@ -75,6 +75,7 @@ export const redeemCode = (codeStr: string): { success: boolean; message: string
   // Atualiza o código para resgatado
   codes[codeIndex].isRedeemed = true;
   codes[codeIndex].redeemedAt = Date.now();
+  codes[codeIndex].redeemedBy = userEmail;
   localStorage.setItem(STORAGE_KEYS.CODES, JSON.stringify(codes));
 
   // Atualiza o status do usuário

@@ -8,9 +8,10 @@ import BluetoothConnect from './BluetoothConnect';
 interface HomeProps {
   onSelectMode: (mode: AppMode) => void;
   userRole: 'user' | 'admin' | 'corporate-admin' | 'corporate-user';
+  userEmail: string;
 }
 
-const Home: React.FC<HomeProps> = ({ onSelectMode, userRole }) => {
+const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail }) => {
   const [code, setCode] = useState('');
   const [status, setStatus] = useState(getUserStatus());
   const [redeemMsg, setRedeemMsg] = useState<{type: 'success'|'error', text: string} | null>(null);
@@ -24,7 +25,7 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole }) => {
 
   const handleRedeem = () => {
     if (!code.trim()) return;
-    const result = redeemCode(code.trim().toUpperCase());
+    const result = redeemCode(code.trim().toUpperCase(), userEmail);
     if (result.success) {
       setRedeemMsg({ type: 'success', text: result.message });
       setStatus(getUserStatus());
