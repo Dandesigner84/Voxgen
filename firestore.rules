@@ -10,8 +10,11 @@ service cloud.firestore {
     // --- Helpers ---
     function isSignedIn() { return request.auth != null; }
     function isEmailVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function isPlatformAdmin() {
+      return isSignedIn() && request.auth.token.email == 'limadan389@gmail.com';
+    }
     function isAdmin() { 
-      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      return isPlatformAdmin() || (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
     }
     function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
     function incoming() { return request.resource.data; }
@@ -23,7 +26,7 @@ service cloud.firestore {
 
     // Role check from users collection (if needed as fallback)
     function hasRole(role) {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
     }
 
     // --- Entity Validations ---
@@ -60,7 +63,9 @@ service cloud.firestore {
     match /users/{userId} {
       allow get: if isOwner(userId) || isAdmin();
       allow list: if isAdmin();
-      allow create: if isOwner(userId) && isValidUser(incoming()) && incoming().role != 'admin';
+      allow create: if isOwner(userId) && isValidUser(incoming()) && (
+        incoming().role != 'admin' || isPlatformAdmin()
+      );
       allow update: if (isOwner(userId) || isAdmin()) && isValidUser(incoming()) && (
         isAdmin() || (
           // Plan updates only via code redemption logic (verified elsewhere or restricted fields)
