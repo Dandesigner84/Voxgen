@@ -52,6 +52,17 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole }) => {
                     <ShieldCheck size={16} /> Painel Administrativo
                 </button>
             )}
+
+            {!isCorpTeam && userRole !== 'admin' && (
+                <div className="mt-4 flex flex-wrap gap-3">
+                    <button onClick={() => alert("Módulo de Equipe em breve!")} className="inline-flex items-center gap-2 bg-emerald-600/20 border border-emerald-500/50 text-emerald-300 px-4 py-2 rounded-full text-sm font-bold hover:bg-emerald-600 hover:text-white transition-all">
+                        <Users size={16} /> Cadastrar Equipe
+                    </button>
+                    <button onClick={() => alert("Upgrade para Plano Ilimitado em breve!")} className="inline-flex items-center gap-2 bg-amber-600/20 border border-amber-500/50 text-amber-300 px-4 py-2 rounded-full text-sm font-bold hover:bg-amber-600 hover:text-white transition-all">
+                        <Sparkles size={16} /> Cadastro Premium
+                    </button>
+                </div>
+            )}
         </div>
 
         <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 min-w-[300px] backdrop-blur-sm shadow-xl">

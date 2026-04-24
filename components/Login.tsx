@@ -8,12 +8,13 @@ interface LoginProps {
   onLogin: (role: UserRole, email: string) => void;
 }
 
-type AuthStep = 'login' | 'register_data';
+type AuthStep = 'login' | 'register';
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [step, setStep] = useState<AuthStep>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -52,6 +53,25 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         // Just let anyone in for now since we are bypassing Supabase
         onLogin('user', email);
     }
+    setLoading(false);
+  };
+
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password || !confirmPassword || !name) {
+        setError('Preencha todos os campos.');
+        return;
+    }
+    if (password !== confirmPassword) {
+        setError('As senhas não coincidem.');
+        return;
+    }
+    setLoading(true);
+    setError('');
+    
+    // Simular registro
+    await new Promise(r => setTimeout(r, 1000));
+    onLogin('user', email);
     setLoading(false);
   };
 
@@ -200,6 +220,19 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         </button>
                     </form>
 
+                    <div className="pt-2 text-center text-xs text-slate-400">
+                        Ainda não tem conta?{' '}
+                        <button 
+                            onClick={() => {
+                                setStep('register');
+                                setError('');
+                            }} 
+                            className="text-indigo-400 font-bold hover:underline"
+                        >
+                            Cadastre-se agora
+                        </button>
+                    </div>
+
                     <div className="relative flex py-4 items-center">
                         <div className="flex-grow border-t border-slate-800"></div>
                         <span className="flex-shrink-0 mx-4 text-slate-600 text-[10px] uppercase font-bold tracking-widest text-center">Seguro & Criptografado</span>
@@ -216,6 +249,99 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 <p className="mt-8 text-center text-[10px] text-slate-500 leading-relaxed max-w-[280px] mx-auto">
                     Ao entrar, você concorda com nossos <span className="text-slate-400 hover:text-indigo-400 transition-colors cursor-pointer">Termos de Serviço</span> e <span className="text-slate-400 hover:text-indigo-400 transition-colors cursor-pointer">Política de Privacidade</span>.
                 </p>
+            </>
+        )}
+
+        {step === 'register' && (
+            <>
+                <div className="text-center mb-6">
+                  <h2 className="text-2xl font-bold text-white mb-2">Criar Nova Conta</h2>
+                  <p className="text-slate-400 text-sm">Junte-se à revolução da voz com IA</p>
+                </div>
+
+                <form onSubmit={handleRegisterSubmit} className="space-y-4 text-left">
+                    <div>
+                        <label className="text-[10px] text-slate-500 uppercase font-bold ml-1 mb-1 block">Nome Completo</label>
+                        <div className="relative">
+                            <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                            <input 
+                                type="text" 
+                                value={name} 
+                                onChange={e => setName(e.target.value)} 
+                                placeholder="Seu nome" 
+                                className="w-full bg-slate-800 border border-slate-700 rounded-xl py-3 pl-11 pr-4 text-white outline-none focus:border-indigo-500 transition-colors" 
+                            />
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label className="text-[10px] text-slate-500 uppercase font-bold ml-1 mb-1 block">Email</label>
+                        <div className="relative">
+                            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                            <input 
+                                type="email" 
+                                value={email} 
+                                onChange={e => setEmail(e.target.value)} 
+                                placeholder="email@exemplo.com" 
+                                className="w-full bg-slate-800 border border-slate-700 rounded-xl py-3 pl-11 pr-4 text-white outline-none focus:border-indigo-500 transition-colors" 
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] text-slate-500 uppercase font-bold ml-1 mb-1 block">Senha</label>
+                            <div className="relative">
+                                <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                                <input 
+                                    type="password" 
+                                    value={password} 
+                                    onChange={e => setPassword(e.target.value)} 
+                                    placeholder="••••••" 
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl py-3 pl-11 pr-4 text-white outline-none focus:border-indigo-500 transition-colors text-sm" 
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-[10px] text-slate-500 uppercase font-bold ml-1 mb-1 block">Confirmar</label>
+                            <div className="relative">
+                                <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                                <input 
+                                    type="password" 
+                                    value={confirmPassword} 
+                                    onChange={e => setConfirmPassword(e.target.value)} 
+                                    placeholder="••••••" 
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl py-3 pl-11 pr-4 text-white outline-none focus:border-indigo-500 transition-colors text-sm" 
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {error && (
+                        <div className="bg-red-500/10 text-red-400 p-3 rounded-lg text-[10px] text-center border border-red-500/20 flex items-center justify-center gap-2">
+                            <AlertCircle size={14} /> {error}
+                        </div>
+                    )}
+
+                    <button 
+                        type="submit" 
+                        disabled={loading} 
+                        className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 mt-4"
+                    >
+                         {loading ? <Loader2 className="animate-spin" /> : <><UserPlus size={18} /> Finalizar Cadastro</>}
+                    </button>
+
+                    <button 
+                        type="button"
+                        onClick={() => {
+                            setStep('login');
+                            setError('');
+                        }} 
+                        className="w-full py-2 text-slate-400 hover:text-white text-xs font-medium flex items-center justify-center gap-2"
+                    >
+                        <ArrowLeft size={14} /> Voltar para o login
+                    </button>
+                </form>
             </>
         )}
       </div>
