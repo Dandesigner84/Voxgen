@@ -53,16 +53,33 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole }) => {
                 </button>
             )}
 
-            {!isCorpTeam && userRole !== 'admin' && (
-                <div className="mt-4 flex flex-wrap gap-3">
-                    <button onClick={() => alert("Módulo de Equipe em breve!")} className="inline-flex items-center gap-2 bg-emerald-600/20 border border-emerald-500/50 text-emerald-300 px-4 py-2 rounded-full text-sm font-bold hover:bg-emerald-600 hover:text-white transition-all">
-                        <Users size={16} /> Cadastrar Equipe
-                    </button>
-                    <button onClick={() => alert("Upgrade para Plano Ilimitado em breve!")} className="inline-flex items-center gap-2 bg-amber-600/20 border border-amber-500/50 text-amber-300 px-4 py-2 rounded-full text-sm font-bold hover:bg-amber-600 hover:text-white transition-all">
-                        <Sparkles size={16} /> Cadastro Premium
-                    </button>
-                </div>
-            )}
+            <div className="mt-6 flex flex-wrap gap-4">
+                <button 
+                    onClick={() => alert("Módulo de Equipe em breve!")} 
+                    className="group flex items-center gap-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-3 rounded-2xl font-bold hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all hover:-translate-y-1 active:scale-95"
+                >
+                    <div className="bg-white/20 p-1.5 rounded-lg group-hover:rotate-12 transition-transform">
+                        <Users size={20} />
+                    </div>
+                    <div className="text-left">
+                        <div className="text-[10px] opacity-80 uppercase tracking-widest leading-none mb-1">Corporate</div>
+                        <div className="text-sm">Cadastrar Equipe</div>
+                    </div>
+                </button>
+                
+                <button 
+                    onClick={() => alert("Upgrade para Plano Ilimitado em breve!")} 
+                    className="group flex items-center gap-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white px-6 py-3 rounded-2xl font-bold hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all hover:-translate-y-1 active:scale-95"
+                >
+                    <div className="bg-white/20 p-1.5 rounded-lg group-hover:rotate-12 transition-transform">
+                        <Sparkles size={20} />
+                    </div>
+                    <div className="text-left">
+                        <div className="text-[10px] opacity-80 uppercase tracking-widest leading-none mb-1">VIP Access</div>
+                        <div className="text-sm">Cadastro Premium</div>
+                    </div>
+                </button>
+            </div>
         </div>
 
         <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 min-w-[300px] backdrop-blur-sm shadow-xl">
@@ -113,7 +130,7 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole }) => {
           <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           {!isAdmin && (
             <div className="absolute top-4 right-4 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-bold z-10">
-              MANUTENÇÃO
+              EM CONSTRUÇÃO
             </div>
           )}
           <div className="w-16 h-16 bg-indigo-500/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
@@ -123,7 +140,7 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole }) => {
           {isAdmin ? (
             <p className="text-slate-400 text-xs">Transforme textos em voz humana com alta fidelidade.</p>
           ) : (
-            <p className="text-amber-500/70 text-xs font-medium italic">Desculpe, estamos indisponíveis para implantar melhorias.</p>
+            <p className="text-amber-500/70 text-xs font-medium italic">Módulo em construção. Disponível em breve para usuários comuns.</p>
           )}
         </button>
 
@@ -135,7 +152,7 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole }) => {
             <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             {!isAdmin && (
               <div className="absolute top-4 right-4 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-bold z-10">
-                MANUTENÇÃO
+                EM CONSTRUÇÃO
               </div>
             )}
             <div className="w-16 h-16 bg-purple-500/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
@@ -145,7 +162,7 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole }) => {
             {isAdmin ? (
               <p className="text-slate-400 text-xs">Crie trilhas e músicas completas a partir de descrições.</p>
             ) : (
-              <p className="text-amber-500/70 text-xs font-medium italic">Desculpe, estamos indisponíveis para implantar melhorias.</p>
+              <p className="text-amber-500/70 text-xs font-medium italic">Módulo em construção. Disponível em breve para usuários comuns.</p>
             )}
             </button>
         )}
@@ -157,7 +174,7 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole }) => {
           <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           {!isAdmin && (
             <div className="absolute top-4 right-4 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-bold z-10">
-              MANUTENÇÃO
+              EM CONSTRUÇÃO
             </div>
           )}
           <div className="w-16 h-16 bg-cyan-500/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
@@ -167,7 +184,7 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole }) => {
           {isAdmin ? (
             <p className="text-slate-400 text-xs">Grave sua voz e crie um narrador digital personalizado.</p>
           ) : (
-            <p className="text-amber-500/70 text-xs font-medium italic">Desculpe, estamos indisponíveis para implantar melhorias.</p>
+            <p className="text-amber-500/70 text-xs font-medium italic">Módulo em construção. Disponível em breve para usuários comuns.</p>
           )}
         </button>
 
@@ -181,13 +198,76 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole }) => {
         </button>
 
         <button 
+          onClick={() => isAdmin ? onSelectMode(AppMode.Avatar) : null} 
+          className={`group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${!isAdmin ? 'cursor-not-allowed opacity-80' : 'hover:border-pink-500/50'}`}
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-pink-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          {!isAdmin && (
+            <div className="absolute top-4 right-4 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-bold z-10">
+              EM CONSTRUÇÃO
+            </div>
+          )}
+          <div className="w-16 h-16 bg-pink-500/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+            <Crown size={32} className="text-pink-400" />
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">Avatar Digital</h2>
+          {isAdmin ? (
+            <p className="text-slate-400 text-xs">Crie avatares falantes realistas a partir das suas narrações.</p>
+          ) : (
+            <p className="text-amber-500/70 text-xs font-medium italic">Módulo em construção. Disponível em breve para usuários comuns.</p>
+          )}
+        </button>
+
+        <button 
+          onClick={() => isAdmin ? onSelectMode(AppMode.SFX) : null} 
+          className={`group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${!isAdmin ? 'cursor-not-allowed opacity-80' : 'hover:border-orange-500/50'}`}
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          {!isAdmin && (
+            <div className="absolute top-4 right-4 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-bold z-10">
+              EM CONSTRUÇÃO
+            </div>
+          )}
+          <div className="w-16 h-16 bg-orange-500/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+            <Volume2 size={32} className="text-orange-400" />
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">Efeitos Sonoros</h2>
+          {isAdmin ? (
+            <p className="text-slate-400 text-xs">Gere sons ambientais e efeitos especiais para seus vídeos.</p>
+          ) : (
+            <p className="text-amber-500/70 text-xs font-medium italic">Módulo em construção. Disponível em breve para usuários comuns.</p>
+          )}
+        </button>
+
+        <button 
+          onClick={() => isAdmin ? onSelectMode(AppMode.Manga) : null} 
+          className={`group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${!isAdmin ? 'cursor-not-allowed opacity-80' : 'hover:border-yellow-500/50'}`}
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          {!isAdmin && (
+            <div className="absolute top-4 right-4 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-bold z-10">
+              EM CONSTRUÇÃO
+            </div>
+          )}
+          <div className="w-16 h-16 bg-yellow-500/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+            <Sparkles size={32} className="text-yellow-400" />
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">Manga Studio</h2>
+          {isAdmin ? (
+            <p className="text-slate-400 text-xs">Transforme histórias em quadrinhos dinâmicos com áudio.</p>
+          ) : (
+            <p className="text-amber-500/70 text-xs font-medium italic">Módulo em construção. Disponível em breve para usuários comuns.</p>
+          )}
+        </button>
+
+        <button 
           onClick={() => isAdmin ? onSelectMode(AppMode.PDFAudio) : null} 
           className={`group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${!isAdmin ? 'cursor-not-allowed opacity-80' : 'hover:border-rose-500/50'}`}
         >
           <div className="absolute inset-0 bg-gradient-to-br from-rose-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           {!isAdmin && (
             <div className="absolute top-4 right-4 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-bold z-10">
-              MANUTENÇÃO
+              EM CONSTRUÇÃO
             </div>
           )}
           <div className="w-16 h-16 bg-rose-500/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
@@ -197,7 +277,7 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole }) => {
           {isAdmin ? (
             <p className="text-slate-400 text-xs">Leitura de PDF em voz alta com fundo de vídeo YouTube.</p>
           ) : (
-            <p className="text-amber-500/70 text-xs font-medium italic">Desculpe, estamos indisponíveis para implantar melhorias.</p>
+            <p className="text-amber-500/70 text-xs font-medium italic">Módulo em construção. Disponível em breve para usuários comuns.</p>
           )}
         </button>
       </div>
