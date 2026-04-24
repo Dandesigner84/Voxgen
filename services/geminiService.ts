@@ -10,6 +10,11 @@ const STORAGE_KEYS = {
 
 const getClient = () => {
   const rawKey = process.env.GEMINI_API_KEY || "";
+  
+  if (!rawKey || rawKey === "undefined" || rawKey === "null") {
+      console.error("[Gemini] API Key is missing or invalid. Verify your environment variables.");
+  }
+  
   const cleanKey = rawKey.replace(/["'\s]/g, ""); 
   return new GoogleGenAI({ apiKey: cleanKey });
 };

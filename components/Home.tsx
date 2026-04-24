@@ -16,6 +16,7 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole }) => {
   const [redeemMsg, setRedeemMsg] = useState<{type: 'success'|'error', text: string} | null>(null);
 
   const isCorpTeam = userRole === 'corporate-user';
+  const isAdmin = userRole === 'admin';
 
   useEffect(() => {
     setStatus(getUserStatus());
@@ -94,33 +95,69 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole }) => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl w-full">
-        <button onClick={() => onSelectMode(AppMode.Narration)} className="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 hover:border-indigo-500/50 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl">
+        <button 
+          onClick={() => isAdmin ? onSelectMode(AppMode.Narration) : null} 
+          className={`group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${!isAdmin ? 'cursor-not-allowed opacity-80' : 'hover:border-indigo-500/50'}`}
+        >
           <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          {!isAdmin && (
+            <div className="absolute top-4 right-4 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-bold z-10">
+              MANUTENÇÃO
+            </div>
+          )}
           <div className="w-16 h-16 bg-indigo-500/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
             <Mic size={32} className="text-indigo-400" />
           </div>
           <h2 className="text-xl font-bold text-white mb-2">Narração</h2>
-          <p className="text-slate-400 text-xs">Transforme textos em voz humana com alta fidelidade.</p>
+          {isAdmin ? (
+            <p className="text-slate-400 text-xs">Transforme textos em voz humana com alta fidelidade.</p>
+          ) : (
+            <p className="text-amber-500/70 text-xs font-medium italic">Desculpe, estamos indisponíveis para implantar melhorias.</p>
+          )}
         </button>
 
         {!isCorpTeam && (
-            <button onClick={() => onSelectMode(AppMode.Music)} className="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 hover:border-purple-500/50 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl">
+            <button 
+              onClick={() => isAdmin ? onSelectMode(AppMode.Music) : null} 
+              className={`group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${!isAdmin ? 'cursor-not-allowed opacity-80' : 'hover:border-purple-500/50'}`}
+            >
             <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            {!isAdmin && (
+              <div className="absolute top-4 right-4 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-bold z-10">
+                MANUTENÇÃO
+              </div>
+            )}
             <div className="w-16 h-16 bg-purple-500/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                 <Music size={32} className="text-purple-400" />
             </div>
             <h2 className="text-xl font-bold text-white mb-2">Música</h2>
-            <p className="text-slate-400 text-xs">Crie trilhas e músicas completas a partir de descrições.</p>
+            {isAdmin ? (
+              <p className="text-slate-400 text-xs">Crie trilhas e músicas completas a partir de descrições.</p>
+            ) : (
+              <p className="text-amber-500/70 text-xs font-medium italic">Desculpe, estamos indisponíveis para implantar melhorias.</p>
+            )}
             </button>
         )}
 
-        <button onClick={() => onSelectMode(AppMode.VoiceCloning)} className="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 hover:border-cyan-500/50 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl">
+        <button 
+          onClick={() => isAdmin ? onSelectMode(AppMode.VoiceCloning) : null} 
+          className={`group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${!isAdmin ? 'cursor-not-allowed opacity-80' : 'hover:border-cyan-500/50'}`}
+        >
           <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          {!isAdmin && (
+            <div className="absolute top-4 right-4 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-bold z-10">
+              MANUTENÇÃO
+            </div>
+          )}
           <div className="w-16 h-16 bg-cyan-500/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
             <Mic2 size={32} className="text-cyan-400" />
           </div>
           <h2 className="text-xl font-bold text-white mb-2">Clone de Voz</h2>
-          <p className="text-slate-400 text-xs">Grave sua voz e crie um narrador digital personalizado.</p>
+          {isAdmin ? (
+            <p className="text-slate-400 text-xs">Grave sua voz e crie um narrador digital personalizado.</p>
+          ) : (
+            <p className="text-amber-500/70 text-xs font-medium italic">Desculpe, estamos indisponíveis para implantar melhorias.</p>
+          )}
         </button>
 
         <button onClick={() => onSelectMode(AppMode.SmartPlayer)} className="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 hover:border-emerald-500/50 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl">
@@ -132,13 +169,25 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole }) => {
           <p className="text-slate-400 text-xs">Rádio inteligente com anúncios e músicas automatizadas.</p>
         </button>
 
-        <button onClick={() => onSelectMode(AppMode.PDFAudio)} className="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 hover:border-rose-500/50 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl">
+        <button 
+          onClick={() => isAdmin ? onSelectMode(AppMode.PDFAudio) : null} 
+          className={`group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${!isAdmin ? 'cursor-not-allowed opacity-80' : 'hover:border-rose-500/50'}`}
+        >
           <div className="absolute inset-0 bg-gradient-to-br from-rose-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          {!isAdmin && (
+            <div className="absolute top-4 right-4 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-bold z-10">
+              MANUTENÇÃO
+            </div>
+          )}
           <div className="w-16 h-16 bg-rose-500/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
             <BookOpen size={32} className="text-rose-400" />
           </div>
           <h2 className="text-xl font-bold text-white mb-2">PDF Imersivo</h2>
-          <p className="text-slate-400 text-xs">Leitura de PDF em voz alta com fundo de vídeo YouTube.</p>
+          {isAdmin ? (
+            <p className="text-slate-400 text-xs">Leitura de PDF em voz alta com fundo de vídeo YouTube.</p>
+          ) : (
+            <p className="text-amber-500/70 text-xs font-medium italic">Desculpe, estamos indisponíveis para implantar melhorias.</p>
+          )}
         </button>
       </div>
     </div>

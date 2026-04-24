@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, Sparkles, Loader2, PlayCircle, ArrowLeft, Heart, Smartphone, Play, Square, Volume2, LogOut, CheckCircle, XCircle } from 'lucide-react';
+import { Mic, Sparkles, Loader2, PlayCircle, ArrowLeft, Heart, Smartphone, Play, Square, Volume2, LogOut, CheckCircle, XCircle, ShieldCheck } from 'lucide-react';
 import VoiceControls from './components/VoiceControls';
 import TextInput from './components/TextInput';
 import AudioList from './components/AudioList';
