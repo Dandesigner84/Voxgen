@@ -1,114 +1,181 @@
 
 import { PremiumCode, UserStatus } from "../types";
+import { db, auth, handleFirestoreError, OperationType } from "./firebase";
+import { 
+  doc, 
+  getDoc, 
+  setDoc, 
+  updateDoc, 
+  collection, 
+  query, 
+  where, 
+  getDocs,
+  serverTimestamp,
+  increment,
+  runTransaction,
+  deleteDoc
+} from "firebase/firestore";
 
-const STORAGE_KEYS = {
-  USER_STATUS: 'voxgen_user_status_v1',
-  CODES: 'voxgen_codes_db_v1',
-  USAGE: 'voxgen_daily_usage_v1',
-  TOTAL_USAGE: 'voxgen_total_usage_v1'
-};
-
-// Configurações do Plano Free
 const FREE_LIMITS = {
   NARRATIONS_PER_DAY: 3,
-  MAX_INTERVAL_SMART_PLAYER: 60, // segundos
 };
 
 // --- Admin Logic ---
 
-export const generateCode = (days: number): string => {
+export const generateCode = async (days: number): Promise<string> => {
   const code = 'VOX-' + Math.random().toString(36).substring(2, 8).toUpperCase();
-  const newCode: PremiumCode = {
-    code,
-    days,
-    isRedeemed: false,
-    createdAt: Date.now()
-  };
+  const path = `premiumCodes/${code}`;
   
-  const codes = getStoredCodes();
-  codes.push(newCode);
-  localStorage.setItem(STORAGE_KEYS.CODES, JSON.stringify(codes));
-  return code;
+  try {
+    await setDoc(doc(db, 'premiumCodes', code), {
+      code,
+      days,
+      isRedeemed: false,
+      createdAt: Date.now()
+    });
+    return code;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+    return '';
+  }
 };
 
-export const getStoredCodes = (): PremiumCode[] => {
-  const data = localStorage.getItem(STORAGE_KEYS.CODES);
-  return data ? JSON.parse(data) : [];
+export const getStoredCodes = async (): Promise<PremiumCode[]> => {
+  const path = 'premiumCodes';
+  try {
+    const q = query(collection(db, path));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data() as PremiumCode);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, path);
+    return [];
+  }
 };
 
-export const deleteCode = (codeStr: string) => {
-  const codes = getStoredCodes().filter(c => c.code !== codeStr);
-  localStorage.setItem(STORAGE_KEYS.CODES, JSON.stringify(codes));
+export const deleteCode = async (codeStr: string): Promise<void> => {
+  const path = `premiumCodes/${codeStr}`;
+  try {
+    await deleteDoc(doc(db, 'premiumCodes', codeStr));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
 };
 
 // --- User Logic ---
 
-export const getUserStatus = (): UserStatus => {
-  const todayKey = new Date().toDateString();
-  const usageData = JSON.parse(localStorage.getItem(STORAGE_KEYS.USAGE) || '{}');
-  const narrationsToday = usageData[todayKey] || 0;
-
-  const statusData = JSON.parse(localStorage.getItem(STORAGE_KEYS.USER_STATUS) || '{}');
-  let plan: 'free' | 'premium' = 'free';
+export const getUserStatus = async (userEmail?: string): Promise<UserStatus> => {
+  const user = auth.currentUser;
   
-  if (statusData.expiryDate && statusData.expiryDate > Date.now()) {
-    plan = 'premium';
+  // Se não houver usuário logado, não adianta tentar ler do Firestore (as regras vão negar)
+  if (!user) {
+    return { plan: 'free', expiryDate: null, narrationsToday: 0 };
   }
 
-  return {
-    plan,
-    expiryDate: statusData.expiryDate || null,
-    narrationsToday
-  };
-};
+  const userId = user.uid;
+  const path = `users/${userId}`;
 
-export const redeemCode = (codeStr: string, userEmail: string): { success: boolean; message: string; days?: number } => {
-  const codes = getStoredCodes();
-  const codeIndex = codes.findIndex(c => c.code === codeStr && !c.isRedeemed);
+  try {
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    if (!userDoc.exists()) {
+      return { plan: 'free', expiryDate: null, narrationsToday: 0 };
+    }
+    const data = userDoc.data();
+    const today = new Date().toDateString();
+    
+    const narrationsToday = data.lastUsageDate === today ? (data.narrationsToday || 0) : 0;
+    let plan: 'free' | 'premium' = 'free';
+    
+    if (data.expiryDate && data.expiryDate > Date.now()) {
+      plan = 'premium';
+    }
 
-  if (codeIndex === -1) {
-    return { success: false, message: "Código inválido ou já utilizado." };
+    return {
+      plan,
+      expiryDate: data.expiryDate || null,
+      narrationsToday
+    };
+  } catch (error) {
+    // Retorna valores padrão em caso de erro de conexão ou permissão inicial
+    console.warn("Status do usuário indisponível no momento", error);
+    return { plan: 'free', expiryDate: null, narrationsToday: 0 };
   }
-
-  const code = codes[codeIndex];
-  
-  // Atualiza o código para resgatado
-  codes[codeIndex].isRedeemed = true;
-  codes[codeIndex].redeemedAt = Date.now();
-  codes[codeIndex].redeemedBy = userEmail;
-  localStorage.setItem(STORAGE_KEYS.CODES, JSON.stringify(codes));
-
-  // Atualiza o status do usuário
-  const currentStatus = getUserStatus();
-  const currentExpiry = currentStatus.expiryDate && currentStatus.expiryDate > Date.now() 
-    ? currentStatus.expiryDate 
-    : Date.now();
-  
-  const newExpiry = currentExpiry + (code.days * 24 * 60 * 60 * 1000);
-  
-  localStorage.setItem(STORAGE_KEYS.USER_STATUS, JSON.stringify({
-    expiryDate: newExpiry
-  }));
-
-  return { success: true, message: `Sucesso! ${code.days} dias de Premium adicionados.`, days: code.days };
 };
 
-export const incrementUsage = () => {
-  const todayKey = new Date().toDateString();
-  const usageData = JSON.parse(localStorage.getItem(STORAGE_KEYS.USAGE) || '{}');
-  usageData[todayKey] = (usageData[todayKey] || 0) + 1;
-  localStorage.setItem(STORAGE_KEYS.USAGE, JSON.stringify(usageData));
+export const redeemCode = async (codeStr: string, userEmail: string): Promise<{ success: boolean; message: string; days?: number }> => {
+  const user = auth.currentUser;
+  if (!user) return { success: false, message: "Você precisa estar logado." };
 
-  // Global counter for vignettes/analytics
-  const totalUsage = parseInt(localStorage.getItem(STORAGE_KEYS.TOTAL_USAGE) || '0');
-  const newTotal = totalUsage + 1;
-  localStorage.setItem(STORAGE_KEYS.TOTAL_USAGE, newTotal.toString());
-  
-  return newTotal;
+  const codePath = `premiumCodes/${codeStr}`;
+  const userPath = `users/${user.uid}`;
+
+  try {
+    const result = await runTransaction(db, async (transaction) => {
+      const codeDoc = await transaction.get(doc(db, codePath));
+      if (!codeDoc.exists() || codeDoc.data().isRedeemed) {
+        throw new Error("Código inválido ou já utilizado.");
+      }
+
+      const userDoc = await transaction.get(doc(db, userPath));
+      const userData = userDoc.exists() ? userDoc.data() : { plan: 'free', expiryDate: 0 };
+      
+      const codeData = codeDoc.data();
+      const currentExpiry = (userData.expiryDate && userData.expiryDate > Date.now()) 
+        ? userData.expiryDate 
+        : Date.now();
+      
+      const newExpiry = currentExpiry + (codeData.days * 24 * 60 * 60 * 1000);
+
+      transaction.update(doc(db, codePath), {
+        isRedeemed: true,
+        redeemedAt: Date.now(),
+        redeemedBy: userEmail
+      });
+
+      transaction.set(doc(db, userPath), {
+        ...userData,
+        plan: 'premium',
+        expiryDate: newExpiry,
+        email: userEmail,
+        role: userData.role || 'user'
+      }, { merge: true });
+
+      return codeData.days;
+    });
+
+    return { success: true, message: `Sucesso! ${result} dias de Premium adicionados.`, days: result };
+  } catch (error: any) {
+    return { success: false, message: error.message || "Erro ao resgatar código." };
+  }
 };
 
-export const canGenerateNarration = (): { allowed: boolean; message?: string } => {
-  const status = getUserStatus();
+export const incrementUsage = async (): Promise<number> => {
+  const user = auth.currentUser;
+  if (!user) return 0;
+
+  const path = `users/${user.uid}`;
+  const today = new Date().toDateString();
+
+  try {
+    const userDoc = await getDoc(doc(db, path));
+    const userData = userDoc.exists() ? userDoc.data() : { narrationsToday: 0, lastUsageDate: '' };
+    
+    let currentCount = userData.lastUsageDate === today ? (userData.narrationsToday || 0) : 0;
+    const newCount = currentCount + 1;
+
+    await setDoc(doc(db, path), {
+      narrationsToday: newCount,
+      lastUsageDate: today
+    }, { merge: true });
+    
+    return newCount;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+    return 0;
+  }
+};
+
+export const canGenerateNarration = async (): Promise<{ allowed: boolean; message?: string }> => {
+  const status = await getUserStatus();
   
   if (status.plan === 'premium') {
     return { allowed: true };
@@ -124,13 +191,12 @@ export const canGenerateNarration = (): { allowed: boolean; message?: string } =
   return { allowed: true };
 };
 
-export const isSmartPlayerUnlocked = (): boolean => {
-  const status = getUserStatus();
-  return status.plan === 'premium';
+export const getFormatExpiryDate = (timestamp?: number | null): string => {
+  if (!timestamp) return '---';
+  return new Date(timestamp).toLocaleDateString('pt-BR');
 };
 
-export const getFormatExpiryDate = (): string => {
-    const status = getUserStatus();
-    if (!status.expiryDate) return '';
-    return new Date(status.expiryDate).toLocaleDateString('pt-BR');
+export const isSmartPlayerUnlocked = async (): Promise<boolean> => {
+  const status = await getUserStatus();
+  return status.plan === 'premium';
 };

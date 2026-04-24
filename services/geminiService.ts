@@ -21,14 +21,20 @@ const getClient = () => {
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+import { getApprovedVoices } from "./voiceService";
+
+let customVoicesCache: CustomVoice[] = [];
+
+const updateVoicesCache = async () => {
+    customVoicesCache = await getApprovedVoices();
+};
+
+// Update cache every 2 minutes
+setInterval(updateVoicesCache, 120000);
+updateVoicesCache();
+
 const getCustomVoiceById = (id: string): CustomVoice | undefined => {
-    try {
-      const data = localStorage.getItem(STORAGE_KEYS.CUSTOM_VOICES);
-      const voices: CustomVoice[] = data ? JSON.parse(data) : [];
-      return voices.find(v => v.id === id);
-    } catch (e) {
-      return undefined;
-    }
+    return customVoicesCache.find(v => v.id === id);
 };
 
 const getMimeTypeFromBase64 = (base64String: string, defaultType: string = 'audio/wav'): string => {

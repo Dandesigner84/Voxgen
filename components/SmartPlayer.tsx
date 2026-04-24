@@ -42,9 +42,18 @@ interface SmartPlayerProps {
   initAudioContext: () => AudioContext;
   narrationHistory: AudioItem[];
   userRole?: UserRole;
+  userEmail?: string;
+  companyName?: string;
 }
 
-const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContext, narrationHistory, userRole = 'user' }) => {
+const SmartPlayer: React.FC<SmartPlayerProps> = ({ 
+  audioContext, 
+  initAudioContext, 
+  narrationHistory, 
+  userRole = 'user',
+  userEmail,
+  companyName
+}) => {
   const [playlist, setPlaylist] = useState<Track[]>([]);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -80,12 +89,20 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
   const narrationsSinceVignetteRef = useRef(0);
 
   const { isIOS } = usePlatformDetection();
-  const isPremium = isSmartPlayerUnlocked();
+  const [isPremium, setIsPremium] = useState(false);
   const isSmartEqEnabledRef = useRef(isSmartEqEnabled);
   const isCorpAdmin = userRole === 'corporate-admin';
   const isCorpUser = userRole === 'corporate-user';
   const isCorporateMode = isCorpAdmin || isCorpUser;
   const currentTrack = playlist[currentTrackIndex];
+
+  useEffect(() => {
+    const checkPremium = async () => {
+      const p = await isSmartPlayerUnlocked();
+      setIsPremium(p);
+    };
+    checkPremium();
+  }, []);
 
   useEffect(() => {
     isSmartEqEnabledRef.current = isSmartEqEnabled;
@@ -151,7 +168,10 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
         initYoutubePlayer();
     }
     
-    if (isCorporateMode) syncCorporatePlaylist();
+    if (isCorporateMode) {
+        const companyId = companyName || userEmail || 'default_corp';
+        syncCorporatePlaylist(companyId);
+    }
 
     // Voice Command Listeners
     const onVoicePlay = () => {
@@ -190,8 +210,8 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({ audioContext, initAudioContex
     loadVignette();
   }, []); 
 
-  const syncCorporatePlaylist = () => {
-      const corpTracks = getCorporatePlaylist();
+  const syncCorporatePlaylist = async (companyId: string) => {
+      const corpTracks = await getCorporatePlaylist(companyId);
       if (corpTracks.length > 0) setPlaylist(corpTracks);
   };
 

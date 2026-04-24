@@ -13,28 +13,35 @@ interface HomeProps {
 
 const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail }) => {
   const [code, setCode] = useState('');
-  const [status, setStatus] = useState(getUserStatus());
+  const [status, setStatus] = useState<any>(null);
   const [redeemMsg, setRedeemMsg] = useState<{type: 'success'|'error', text: string} | null>(null);
 
   const isCorpTeam = userRole === 'corporate-user';
   const isAdmin = userRole === 'admin';
 
   useEffect(() => {
-    setStatus(getUserStatus());
-  }, []);
+    refreshStatus();
+  }, [userEmail]);
 
-  const handleRedeem = () => {
+  const refreshStatus = async () => {
+    const s = await getUserStatus(userEmail);
+    setStatus(s);
+  };
+
+  const handleRedeem = async () => {
     if (!code.trim()) return;
-    const result = redeemCode(code.trim().toUpperCase(), userEmail);
+    const result = await redeemCode(code.trim().toUpperCase(), userEmail);
     if (result.success) {
       setRedeemMsg({ type: 'success', text: result.message });
-      setStatus(getUserStatus());
+      refreshStatus();
       setCode('');
     } else {
       setRedeemMsg({ type: 'error', text: result.message });
     }
     setTimeout(() => setRedeemMsg(null), 5000);
   };
+
+  if (!status) return <div className="min-h-screen flex items-center justify-center text-slate-500 font-bold">Carregando VoxGen...</div>;
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[80vh] w-full animate-fade-in px-4 py-8">
@@ -99,7 +106,7 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail }) => {
             
             {status.plan === 'premium' ? (
                 <div className="text-xs text-slate-400">
-                    Acesso ilimitado até <span className="text-white font-bold">{getFormatExpiryDate()}</span>
+                    Acesso ilimitado até <span className="text-white font-bold">{getFormatExpiryDate(status.expiryDate)}</span>
                 </div>
             ) : (
                 <div className="text-xs text-slate-400 mb-2">
@@ -125,11 +132,11 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail }) => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl w-full">
         <button 
-          onClick={() => isAdmin ? onSelectMode(AppMode.Narration) : null} 
-          className={`group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${!isAdmin ? 'cursor-not-allowed opacity-80' : 'hover:border-indigo-500/50'}`}
+          onClick={() => (isAdmin || userRole === 'corporate-admin') ? onSelectMode(AppMode.Narration) : alert("Módulo em construção para usuários VIP.")} 
+          className={`group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${(userRole === 'user' || userRole === 'corporate-user') && !isAdmin ? 'cursor-not-allowed opacity-80' : 'hover:border-indigo-500/50'}`}
         >
           <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          {!isAdmin && (
+          {(userRole === 'user' || userRole === 'corporate-user') && !isAdmin && (
             <div className="absolute top-4 right-4 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-bold z-10">
               EM CONSTRUÇÃO
             </div>
@@ -138,7 +145,7 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail }) => {
             <Mic size={32} className="text-indigo-400" />
           </div>
           <h2 className="text-xl font-bold text-white mb-2">Narração</h2>
-          {isAdmin ? (
+          {(isAdmin || userRole === 'corporate-admin') ? (
             <p className="text-slate-400 text-xs">Transforme textos em voz humana com alta fidelidade.</p>
           ) : (
             <p className="text-amber-500/70 text-xs font-medium italic">Módulo em construção. Disponível em breve para usuários comuns.</p>
@@ -147,7 +154,7 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail }) => {
 
         {!isCorpTeam && (
             <button 
-              onClick={() => isAdmin ? onSelectMode(AppMode.Music) : null} 
+              onClick={() => isAdmin ? onSelectMode(AppMode.Music) : alert("Módulo em construção para usuários VIP.")} 
               className={`group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${!isAdmin ? 'cursor-not-allowed opacity-80' : 'hover:border-purple-500/50'}`}
             >
             <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -169,7 +176,7 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail }) => {
         )}
 
         <button 
-          onClick={() => isAdmin ? onSelectMode(AppMode.VoiceCloning) : null} 
+          onClick={() => isAdmin ? onSelectMode(AppMode.VoiceCloning) : alert("Módulo em construção para usuários VIP.")} 
           className={`group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${!isAdmin ? 'cursor-not-allowed opacity-80' : 'hover:border-cyan-500/50'}`}
         >
           <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />

@@ -1,0 +1,97 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() { return request.auth != null; }
+    function isEmailVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function isAdmin() { 
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+
+    // Role check from users collection (if needed as fallback)
+    function hasRole(role) {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    }
+
+    // --- Entity Validations ---
+    
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'role']) &&
+             data.email is string && data.email.size() <= 100 &&
+             data.role in ['user', 'admin', 'corporate-admin', 'corporate-user'] &&
+             (data.get('name', '') is string) && (data.get('name', '').size() <= 100) &&
+             (data.get('plan', 'free') in ['free', 'premium']) &&
+             (data.get('expiryDate', 0) is number) &&
+             (data.get('narrationsToday', 0) is number) &&
+             (data.get('createdAt', 0) is number) &&
+             (data.get('lastUsageDate', '') is string);
+    }
+
+    function isValidPremiumCode(data) {
+      return data.keys().hasAll(['code', 'days', 'isRedeemed']) &&
+             data.code is string && data.code.size() <= 20 &&
+             data.days is number && data.days > 0 &&
+             data.isRedeemed is bool &&
+             (data.get('redeemedBy', '') is string) &&
+             (data.get('redeemedAt', 0) is number) &&
+             (data.get('createdAt', 0) is number);
+    }
+
+    // --- Collection Rules ---
+
+    match /admins/{userId} {
+      allow read: if isSignedIn();
+      allow write: if false; // Only manageable via console
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(userId) && isValidUser(incoming()) && incoming().role != 'admin';
+      allow update: if (isOwner(userId) || isAdmin()) && isValidUser(incoming()) && (
+        isAdmin() || (
+          // Plan updates only via code redemption logic (verified elsewhere or restricted fields)
+          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'narrationsToday', 'lastUsageDate'])
+        )
+      );
+    }
+
+    match /premiumCodes/{codeId} {
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
+      allow create: if isAdmin() && isValidPremiumCode(incoming());
+      allow update: if (isAdmin() || (
+        isSignedIn() && 
+        !existing().isRedeemed && 
+        incoming().isRedeemed == true &&
+        incoming().redeemedBy == request.auth.token.email &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['isRedeemed', 'redeemedBy', 'redeemedAt'])
+      )) && isValidPremiumCode(incoming());
+      allow delete: if isAdmin();
+    }
+
+    match /corporateContent/{adminId} {
+      allow read: if isSignedIn() && (isOwner(adminId) || hasRole('corporate-user') || isAdmin());
+      allow write: if isOwner(adminId) || isAdmin();
+    }
+
+    match /customVoices/{voiceId} {
+      allow read: if (resource.data.category == 'official_approved') || (isSignedIn() && (isOwner(resource.data.userId) || isAdmin()));
+      allow create: if isSignedIn() && isValidId(voiceId) && isOwner(incoming().userId);
+      allow update, delete: if isSignedIn() && isValidId(voiceId) && (isOwner(existing().userId) || isAdmin());
+    }
+  }
+}

@@ -21,53 +21,51 @@ import { DEFAULT_TEXT, VIGNETTE_TEXT } from './constants';
 import { refineText, generateSpeech, addAutomaticSFX } from './services/geminiService';
 import { decodeAudioData, addBackgroundMusic } from './utils/audioUtils';
 import { canGenerateNarration, incrementUsage } from './services/monetizationService';
-
-import { getSupabase, signOut as supabaseSignOut } from './services/supabase';
+import { auth, db } from './services/firebase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 const AppContent: React.FC = () => {
   const [user, setUser] = useState<UserSession | null>(null);
-  const [authLoading, setAuthLoading] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
   const [mode, setMode] = useState<AppMode>(AppMode.Home);
   
-  // Auth listener re-enabled
   useEffect(() => {
-    const supabase = getSupabase();
-    
-    // 1. Restaurar sessão local rápida
-    const savedUser = localStorage.getItem('voxgen_user_v1');
-    if (savedUser) {
-        setUser(JSON.parse(savedUser));
-    }
-
-    // 2. Ouvir mudanças no Supabase (Google Login)
-    if (supabase) {
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session?.user) {
-                const email = session.user.email || '';
-                const role: UserRole = (email === 'limadan389@gmail.com') ? 'admin' : 'user';
-                const newUser = { role, email };
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+            const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+            if (userDoc.exists()) {
+                setUser({
+                    email: firebaseUser.email || '',
+                    role: userDoc.data().role as UserRole,
+                    companyName: userDoc.data().companyName
+                });
+            } else {
+                // Initial sync if doc was somehow missed
+                const role: UserRole = (firebaseUser.email === 'limadan389@gmail.com') ? 'admin' : 'user';
+                const newUser = { role, email: firebaseUser.email || '' };
                 setUser(newUser);
-                localStorage.setItem('voxgen_user_v1', JSON.stringify(newUser));
+                await setDoc(doc(db, 'users', firebaseUser.uid), {
+                    email: firebaseUser.email,
+                    role: role,
+                    plan: 'free',
+                    narrationsToday: 0,
+                    createdAt: Date.now()
+                }, { merge: true });
             }
-        });
+        } catch (e) {
+            console.error("Auth sync error", e);
+        }
+      } else {
+        setUser(null);
+      }
+      setAuthLoading(false);
+    });
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            if (session?.user) {
-                const email = session.user.email || '';
-                const role: UserRole = (email === 'limadan389@gmail.com') ? 'admin' : 'user';
-                const newUser = { role, email };
-                setUser(newUser);
-                localStorage.setItem('voxgen_user_v1', JSON.stringify(newUser));
-                setMode(AppMode.Home);
-            } else if (_event === 'SIGNED_OUT') {
-                setUser(null);
-                localStorage.removeItem('voxgen_user_v1');
-            }
-        });
-
-        return () => subscription.unsubscribe();
-    }
+    return () => unsubscribe();
   }, []);
+
   const [selectedVoice, setSelectedVoice] = useState<VoiceName | string>(VoiceName.Kore);
   const [text, setText] = useState(DEFAULT_TEXT);
   const [selectedTone, setSelectedTone] = useState<ToneType | string>(ToneType.Neutral);
@@ -100,23 +98,16 @@ const AppContent: React.FC = () => {
   }, []);
 
   const handleLogin = (role: UserRole, email: string) => {
-    const newUser = { role, email };
-    setUser(newUser);
-    localStorage.setItem('voxgen_user_v1', JSON.stringify(newUser));
-    if (role === 'admin' || email === 'limadan389@gmail.com') {
-        setMode(AppMode.Admin);
-    } else {
-        setMode(AppMode.Home);
-    }
+     // User is already set via onAuthStateChanged
+     if (role === 'admin' || email === 'limadan389@gmail.com') {
+         setMode(AppMode.Admin);
+     } else {
+         setMode(AppMode.Home);
+     }
   };
 
   const handleLogout = async () => {
-    const supabase = getSupabase();
-    if (supabase) {
-        await supabaseSignOut();
-    }
-    setUser(null);
-    localStorage.removeItem('voxgen_user_v1');
+    await signOut(auth);
     setMode(AppMode.Home);
   };
 
@@ -188,7 +179,6 @@ const AppContent: React.FC = () => {
             if (mode === AppMode.Narration && text.trim()) {
                 handlePreviewNarration();
             } else if (mode === AppMode.SmartPlayer) {
-                // O SmartPlayer tem controles internos, mas o comando de voz pode ser estendido via evento global
                 window.dispatchEvent(new CustomEvent('voxgen-play'));
             }
             break;
@@ -236,7 +226,7 @@ const AppContent: React.FC = () => {
     stopPreview();
     const isSuperAdmin = user?.email === 'limadan389@gmail.com';
     if (user?.role !== 'admin' && !isSuperAdmin && user?.role !== 'corporate-admin') {
-        const limitCheck = canGenerateNarration();
+        const limitCheck = await canGenerateNarration();
         if (!limitCheck.allowed) { alert(limitCheck.message); return; }
     }
     const ctx = initAudioContext();
@@ -254,12 +244,7 @@ const AppContent: React.FC = () => {
         // Monetization & Vignette Trigger
         let currentCount = 0;
         if (user?.role !== 'admin' && !isSuperAdmin && user?.role !== 'corporate-admin') { 
-            currentCount = incrementUsage(); 
-        } else {
-            // Track for admins so they can test/see the feature
-            const total = parseInt(localStorage.getItem('voxgen_total_usage_v1') || '0') + 1;
-            localStorage.setItem('voxgen_total_usage_v1', total.toString());
-            currentCount = total;
+            currentCount = await incrementUsage(); 
         }
 
         // Trigger CTA Vignette every 5th narration
@@ -267,15 +252,15 @@ const AppContent: React.FC = () => {
             console.log(`[VoxGen CTA] Triggering vignette for narration #${currentCount}`);
             setTimeout(async () => {
                 try {
-                    const vignetteBase64 = await generateSpeech(VIGNETTE_TEXT, VoiceName.Zephyr); // Usando Zephyr para a vinheta ficar mais amigável
+                    const vignetteBase64 = await generateSpeech(VIGNETTE_TEXT, VoiceName.Zephyr); 
                     const vBuffer = await decodeAudioData(vignetteBase64, ctx);
-                    const vSource = ctx.createBufferSource();
-                    vSource.buffer = vBuffer;
-                    vSource.connect(masterGainNodeRef.current || ctx.destination);
-                    vSource.start(0);
-                    // Adicionamos no histórico também para o usuário poder ouvir de novo
-                    const vignetteItem: AudioItem = { id: `cta-${currentCount}`, text: "[VINHETA CTA] " + VIGNETTE_TEXT, voice: VoiceName.Zephyr, audioData: vBuffer, createdAt: new Date(), duration: vBuffer.duration };
-                    setHistory(prev => [vignetteItem, ...prev]);
+                    const newItem: AudioItem = { id: `cta-${currentCount}`, text: "[VINHETA CTA] " + VIGNETTE_TEXT, voice: VoiceName.Zephyr, audioData: vBuffer, createdAt: new Date(), duration: vBuffer.duration };
+                    setHistory(prev => [newItem, ...prev]);
+                    
+                    const source = ctx.createBufferSource();
+                    source.buffer = vBuffer;
+                    source.connect(masterGainNodeRef.current || ctx.destination);
+                    source.start(0);
                 } catch (e) { console.error("Erro ao reproduzir vinheta CTA", e); }
             }, 2000);
         }
@@ -346,7 +331,14 @@ const AppContent: React.FC = () => {
       
       <main className="flex-grow py-8">
          <div className={mode === AppMode.SmartPlayer ? 'block' : 'hidden'}>
-            <SmartPlayer audioContext={audioContextRef.current} initAudioContext={initAudioContext} narrationHistory={history} userRole={user.role} />
+            <SmartPlayer 
+                audioContext={audioContextRef.current} 
+                initAudioContext={initAudioContext} 
+                narrationHistory={history} 
+                userRole={user.role} 
+                userEmail={user.email} 
+                companyName={user.companyName}
+            />
          </div>
 
          {mode === AppMode.Home && <Home onSelectMode={setMode} userRole={user.role} userEmail={user.email} />}
@@ -386,7 +378,7 @@ const AppContent: React.FC = () => {
       
       <footer className="p-6 text-center text-slate-500 text-xs border-t border-slate-900/50 bg-[#0f172a] mt-auto">
          <p>Desenvolvido com ❤️ por <span className="text-indigo-400 font-bold">Daniel de Oliveira</span></p>
-         <p className="opacity-50 mt-1">Powered by Google Gemini 2.5 & Web Audio API</p>
+         <p className="opacity-50 mt-1">Powered by Cloud Firestore & Google Gemini</p>
       </footer>
     </div>
   );

@@ -23,6 +23,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ userRole = 'admin', userEmail }
   const [daysToGen, setDaysToGen] = useState(30);
   const [copied, setCopied] = useState<string | null>(null);
   const [managedVoices, setManagedVoices] = useState<CustomVoice[]>([]);
+  const [loading, setLoading] = useState(false);
 
   // Corporate Admin State
   const [teamMembers, setTeamMembers] = useState<CorporateAccount[]>([]);
@@ -34,25 +35,43 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ userRole = 'admin', userEmail }
     loadData();
   }, [activeTab, isSuperAdmin, isCorporate]);
 
-  const loadData = () => {
-    if (isSuperAdmin) {
-        if (activeTab === 'codes') setCodes(getStoredCodes().reverse());
-        if (activeTab === 'voices') setManagedVoices(getAllOfficialVoices());
-        if (activeTab === 'team') setTeamMembers(getCorporateAccounts());
-    } else if (isCorporate) {
-        setTeamMembers(getCorporateAccounts());
+  const loadData = async () => {
+    setLoading(true);
+    try {
+        if (isSuperAdmin) {
+            if (activeTab === 'codes') {
+                const storedCodes = await getStoredCodes();
+                setCodes(storedCodes.reverse());
+            }
+            if (activeTab === 'voices') {
+                const voices = await getAllOfficialVoices();
+                setManagedVoices(voices);
+            }
+            if (activeTab === 'team') {
+                // For super admins, we might want to list all corporate content, but for now just empty or specific
+                setTeamMembers([]);
+            }
+        } else if (isCorporate) {
+            // For corporate admins, companyName should be available in user object
+            const companyId = userEmail || 'default_corp'; // Fallback
+            const accounts = await getCorporateAccounts(companyId);
+            setTeamMembers(accounts);
+        }
+    } finally {
+        setLoading(false);
     }
   };
 
-  const handleGenerate = () => {
-    generateCode(daysToGen);
-    loadData();
+  const handleGenerate = async () => {
+    setLoading(true);
+    await generateCode(daysToGen);
+    await loadData();
   };
 
-  const handleDeleteCode = (code: string) => {
+  const handleDeleteCode = async (code: string) => {
     if (confirm('Tem certeza que deseja excluir este código?')) {
-      deleteCode(code);
-      loadData();
+      await deleteCode(code);
+      await loadData();
     }
   };
 
@@ -62,27 +81,24 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ userRole = 'admin', userEmail }
     setTimeout(() => setCopied(null), 2000);
   };
 
-  const handleIncludeNarrator = (id: string) => {
+  const handleIncludeNarrator = async (id: string) => {
       if (confirm('Deseja INCLUIR este narrador na lista oficial da plataforma?')) {
-        updateVoiceStatus(id, 'official_approved', 'Parabéns! Sua voz foi aprovada.');
-        loadData();
+        await updateVoiceStatus(id, 'official_approved', 'Parabéns! Sua voz foi aprovada.');
+        await loadData();
       }
   };
 
-  const handleExcludeNarrator = (id: string) => {
+  const handleExcludeNarrator = async (id: string) => {
       if (confirm('Excluir permanentemente este narrador?')) {
-          deleteCustomVoice(id);
-          loadData();
+          await deleteCustomVoice(id);
+          await loadData();
       }
   };
 
-  const handleAddMember = (e: React.FormEvent) => {
+  const handleAddMember = async (e: React.FormEvent) => {
       e.preventDefault();
-      const result = addCorporateAccount({ email: newMemberEmail, password: newMemberPass, name: newMemberName });
-      if (result.success) {
-          setNewMemberEmail(''); setNewMemberPass(''); setNewMemberName('');
-          loadData();
-      } else { alert(result.message); }
+      // addCorporateAccount is not yet async/implemented for Firebase, but we'll assume it is soon or handled via user sync
+      alert("A criação de usuários via Admin Panel está sendo migrada para o Firebase Auth. No momento, peça aos usuários para se cadastrarem.");
   };
 
   const handleRemoveMember = (email: string) => {

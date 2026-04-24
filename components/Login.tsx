@@ -1,8 +1,16 @@
 
 import React, { useState } from 'react';
-import { Mail, Lock, LogIn, UserPlus, ArrowRight, ShieldCheck, Github, Building2, Briefcase, User, CheckCircle, ArrowLeft, Loader2, FileText, Globe, Key, AlertCircle } from 'lucide-react';
+import { Mail, ArrowRight, ShieldCheck, User, CheckCircle, ArrowLeft, Loader2, Key, AlertCircle } from 'lucide-react';
 import { UserRole } from '../types';
-import { signInWithGoogle } from '../services/supabase';
+import { auth, db, handleFirestoreError, OperationType } from '../services/firebase';
+import { 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword,
+  updateProfile
+} from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 interface LoginProps {
   onLogin: (role: UserRole, email: string) => void;
@@ -23,15 +31,32 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true);
     setError('');
     try {
-      await signInWithGoogle();
-      // Supabase redirect handles the rest, App.tsx listener will catch it
-    } catch (err: any) {
-      console.error('[Supabase Auth Error]', err);
-      if (err.message?.includes('provider is not enabled')) {
-        setError('Configuração Incompleta: O login via Google não foi ativado no painel do Supabase. Acesse Authentication > Providers no Supabase para ativar.');
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      
+      // Sync user to Firestore
+      const userDocRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userDocRef);
+      
+      if (!userDoc.exists()) {
+        const role: UserRole = (user.email === 'limadan389@gmail.com') ? 'admin' : 'user';
+        await setDoc(userDocRef, {
+          email: user.email,
+          name: user.displayName,
+          role: role,
+          plan: 'free',
+          narrationsToday: 0,
+          createdAt: Date.now()
+        });
+        onLogin(role, user.email || '');
       } else {
-        setError('Erro ao iniciar login com Google: ' + (err.message || 'Erro desconhecido'));
+        onLogin(userDoc.data().role as UserRole, user.email || '');
       }
+    } catch (err: any) {
+      console.error('[Firebase Auth Error]', err);
+      setError('Erro ao iniciar login com Google: ' + (err.message || 'Erro desconhecido'));
+    } finally {
       setLoading(false);
     }
   };
@@ -45,15 +70,21 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true);
     setError('');
     
-    // Hardcoded simple auth for demo/bypass
-    await new Promise(r => setTimeout(r, 800));
-    if (email === "limadan389@gmail.com" && password === "147025") {
-        onLogin('admin', email);
-    } else {
-        // Just let anyone in for now since we are bypassing Supabase
-        onLogin('user', email);
+    try {
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      const user = result.user;
+      
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      if (userDoc.exists()) {
+        onLogin(userDoc.data().role as UserRole, user.email || '');
+      } else {
+        onLogin('user', user.email || '');
+      }
+    } catch (err: any) {
+      setError('Falha no login: ' + (err.message || 'Verifique suas credenciais.'));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
@@ -69,27 +100,29 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true);
     setError('');
     
-    // Simular registro
-    await new Promise(r => setTimeout(r, 1000));
-    onLogin('user', email);
-    setLoading(false);
-  };
-
-  const [showConfig, setShowConfig] = useState(false);
-  const [manualUrl, setManualUrl] = useState(localStorage.getItem('supabase_url_override') || '');
-  const [manualKey, setManualKey] = useState(localStorage.getItem('supabase_key_override') || '');
-
-  const saveManualConfig = () => {
-    if (manualUrl && manualKey) {
-        localStorage.setItem('supabase_url_override', manualUrl);
-        localStorage.setItem('supabase_key_override', manualKey);
-        window.location.reload(); // Recarrega para inicializar o cliente com novas chaves
-    } else {
-        setError('Preencha ambos os campos da configuração.');
+    try {
+      const result = await createUserWithEmailAndPassword(auth, email, password);
+      const user = result.user;
+      
+      await updateProfile(user, { displayName: name });
+      
+      const role: UserRole = (email === 'limadan389@gmail.com') ? 'admin' : 'user';
+      await setDoc(doc(db, 'users', user.uid), {
+        email: email,
+        name: name,
+        role: role,
+        plan: 'free',
+        narrationsToday: 0,
+        createdAt: Date.now()
+      });
+      
+      onLogin(role, email);
+    } catch (err: any) {
+      setError('Falha no cadastro: ' + (err.message || 'Tente novamente.'));
+    } finally {
+      setLoading(false);
     }
   };
-
-  const isConfigMissing = (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_URL === 'your-project-url.supabase.co') && !localStorage.getItem('supabase_url_override');
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0f172a] p-4 font-sans relative overflow-hidden">
@@ -104,86 +137,14 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-400 tracking-tight mb-2">
                     VoxGen AI
                   </h1>
-                  <p className="text-slate-400 text-sm">Crie narrações e clones de voz profissionais</p>
+                  <p className="text-slate-400 text-sm">Acesse o Banco de Dados VoxGen</p>
                 </div>
-
-                {isConfigMissing && !showConfig && (
-                    <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-left">
-                        <div className="flex items-center gap-2 text-amber-500 font-bold text-xs mb-1">
-                            <AlertCircle size={14} /> Configuração Pendente
-                        </div>
-                        <p className="text-[10px] text-slate-400 leading-relaxed mb-3">
-                            As chaves do Supabase não foram detectadas. Você pode configurá-las agora para habilitar o login com Google.
-                        </p>
-                        <button 
-                            onClick={() => setShowConfig(true)}
-                            className="text-[10px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-500 font-bold py-1 px-3 rounded-lg transition-colors border border-amber-500/30"
-                        >
-                            Configurar Agora
-                        </button>
-                    </div>
-                )}
-
-                {showConfig && (
-                    <div className="mb-6 p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-left animate-in slide-in-from-top-2 duration-300">
-                        <h3 className="text-indigo-400 font-bold text-xs mb-3 flex items-center gap-2">
-                            <Key size={14} /> Configuração Manual Supabase
-                        </h3>
-                        <div className="space-y-3">
-                            <div>
-                                <label className="text-[9px] text-slate-500 uppercase font-bold ml-1">Project URL</label>
-                                <input 
-                                    type="text" 
-                                    value={manualUrl}
-                                    onChange={e => setManualUrl(e.target.value)}
-                                    placeholder="https://abc...supabase.co"
-                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2 px-3 text-xs text-white outline-none focus:border-indigo-500"
-                                />
-                            </div>
-                            <div>
-                                <label className="text-[9px] text-slate-500 uppercase font-bold ml-1">Anon Key (Public)</label>
-                                <input 
-                                    type="password" 
-                                    value={manualKey}
-                                    onChange={e => setManualKey(e.target.value)}
-                                    placeholder="eyJhbG..."
-                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2 px-3 text-xs text-white outline-none focus:border-indigo-500"
-                                />
-                            </div>
-                            <div className="flex gap-2">
-                                <button 
-                                    onClick={saveManualConfig}
-                                    className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold py-2 rounded-lg transition-all"
-                                >
-                                    Salvar e Ativar
-                                </button>
-                                <button 
-                                    onClick={() => {
-                                        localStorage.removeItem('supabase_url_override');
-                                        localStorage.removeItem('supabase_key_override');
-                                        window.location.reload();
-                                    }}
-                                    className="bg-slate-800 hover:bg-slate-700 text-red-400 text-[10px] font-bold py-2 px-4 rounded-lg transition-all"
-                                    title="Limpar configurações salvas"
-                                >
-                                    Limpar
-                                </button>
-                                <button 
-                                    onClick={() => setShowConfig(false)}
-                                    className="bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] font-bold py-2 px-4 rounded-lg transition-all"
-                                >
-                                    Cancelar
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
 
                 <div className="space-y-4">
                     <button 
                         onClick={handleGoogleLogin}
-                        disabled={loading || isConfigMissing}
-                        className={`w-full font-bold py-3.5 rounded-xl transition-all shadow-lg flex items-center justify-center gap-3 border ${isConfigMissing ? 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed' : 'bg-white hover:bg-slate-50 text-slate-900 border-slate-200'}`}
+                        disabled={loading}
+                        className="w-full font-bold py-3.5 rounded-xl transition-all shadow-lg flex items-center justify-center gap-3 border bg-white hover:bg-slate-50 text-slate-900 border-slate-200"
                     >
                         {loading ? (
                             <Loader2 className="animate-spin text-indigo-500" />
@@ -195,7 +156,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                                     <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.47 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
                                     <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
                                 </svg>
-                                Continuar com Google
+                                Entrar com Google
                             </>
                         )}
                     </button>
@@ -233,22 +194,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         </button>
                     </div>
 
-                    <div className="relative flex py-4 items-center">
-                        <div className="flex-grow border-t border-slate-800"></div>
-                        <span className="flex-shrink-0 mx-4 text-slate-600 text-[10px] uppercase font-bold tracking-widest text-center">Seguro & Criptografado</span>
-                        <div className="flex-grow border-t border-slate-800"></div>
-                    </div>
-
                     {error && (
                         <div className="bg-red-500/10 text-red-400 p-3 rounded-lg text-xs text-center border border-red-500/20 flex items-center justify-center gap-2">
                             <AlertCircle size={14} /> {error}
                         </div>
                     )}
                 </div>
-
-                <p className="mt-8 text-center text-[10px] text-slate-500 leading-relaxed max-w-[280px] mx-auto">
-                    Ao entrar, você concorda com nossos <span className="text-slate-400 hover:text-indigo-400 transition-colors cursor-pointer">Termos de Serviço</span> e <span className="text-slate-400 hover:text-indigo-400 transition-colors cursor-pointer">Política de Privacidade</span>.
-                </p>
             </>
         )}
 
@@ -256,7 +207,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <>
                 <div className="text-center mb-6">
                   <h2 className="text-2xl font-bold text-white mb-2">Criar Nova Conta</h2>
-                  <p className="text-slate-400 text-sm">Junte-se à revolução da voz com IA</p>
+                  <p className="text-slate-400 text-sm">Acesso integrado ao Cloud Database</p>
                 </div>
 
                 <form onSubmit={handleRegisterSubmit} className="space-y-4 text-left">
@@ -318,7 +269,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     </div>
 
                     {error && (
-                        <div className="bg-red-500/10 text-red-400 p-3 rounded-lg text-[10px] text-center border border-red-500/20 flex items-center justify-center gap-2">
+                        <div className="bg-red-500/10 text-red-400 p-3 rounded-lg text-xs text-center border border-red-500/20 flex items-center justify-center gap-2">
                             <AlertCircle size={14} /> {error}
                         </div>
                     )}
@@ -326,7 +277,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     <button 
                         type="submit" 
                         disabled={loading} 
-                        className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 mt-4"
+                        className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 mt-4"
                     >
                          {loading ? <Loader2 className="animate-spin" /> : <><UserPlus size={18} /> Finalizar Cadastro</>}
                     </button>

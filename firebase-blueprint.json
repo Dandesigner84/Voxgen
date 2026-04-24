@@ -1,0 +1,90 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Stores user profile and monetization status",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin", "corporate-admin", "corporate-user"] },
+        "plan": { "type": "string", "enum": ["free", "premium"] },
+        "expiryDate": { "type": "number" },
+        "narrationsToday": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "lastUsageDate": { "type": "string" }
+      },
+      "required": ["email", "role"]
+    },
+    "PremiumCode": {
+      "title": "PremiumCode",
+      "description": "Redeemable codes for premium access",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "days": { "type": "number" },
+        "isRedeemed": { "type": "boolean" },
+        "redeemedAt": { "type": "number" },
+        "redeemedBy": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["code", "days", "isRedeemed"]
+    },
+    "CorporatePlaylist": {
+      "title": "CorporatePlaylist",
+      "description": "Custom playlist shared within a corporate team",
+      "type": "object",
+      "properties": {
+        "adminId": { "type": "string" },
+        "tracks": { 
+          "type": "array",
+          "items": { "$ref": "#/entities/CorporateTrack" }
+        },
+        "vignetteEnabled": { "type": "boolean" },
+        "updatedAt": { "type": "number" }
+      }
+    },
+    "CorporateTrack": {
+      "title": "CorporateTrack",
+      "description": "Single track in a corporate playlist",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["file", "youtube", "spotify"] },
+        "name": { "type": "string" },
+        "src": { "type": "string" },
+        "thumbnail": { "type": "string" }
+      }
+    },
+    "CustomVoice": {
+      "title": "CustomVoice",
+      "description": "User-cloned voices",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "audioSampleBase64": { "type": "string" },
+        "createdAt": { "type": "number" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Individual user settings"
+    },
+    "/premiumCodes/{codeId}": {
+      "schema": "PremiumCode",
+      "description": "System-wide premium activation codes"
+    },
+    "/corporateContent/{adminId}": {
+      "schema": "CorporatePlaylist",
+      "description": "Shared playlist and settings for a corporate team"
+    },
+    "/customVoices/{voiceId}": {
+      "schema": "CustomVoice",
+      "description": "Cloned voices for individual users"
+    }
+  }
+}
