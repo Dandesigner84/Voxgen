@@ -102,7 +102,9 @@ const AppContent: React.FC = () => {
         }
       } else {
         setUser(null);
-        setMode(AppMode.Home);
+        // Only reset mode to home if we just logged out, 
+        // helping to keep state during initial load.
+        if (!authLoading) setMode(AppMode.Home);
       }
       setAuthLoading(false);
     });

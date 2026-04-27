@@ -67,13 +67,38 @@ const VoiceControls: React.FC<VoiceControlsProps> = ({
     } catch (error) { alert("Erro no preview."); } finally { setLoadingPreviewId(null); }
   };
   
-  const availableVoices = useMemo(() => {
-    const standard = VOICE_OPTIONS.map(v => ({...v, type: 'standard'}));
-    const approved = getApprovedVoices().map(v => ({ value: v.id, label: `${v.name} (Comunidade)`, gender: 'Oficial', type: 'official' }));
-    const privateVoices = userEmail ? getVoicesByUser(userEmail).filter(v => v.category === 'private' || v.category === 'official_approved').map(v => ({ value: v.id, label: `${v.name} (Minha Voz)`, gender: 'Privada', type: 'private' })) : [];
-    const uniqueVoices = [...standard, ...approved];
-    privateVoices.forEach(pv => { if (!uniqueVoices.find(uv => uv.value === pv.value)) uniqueVoices.push(pv); });
-    return uniqueVoices;
+  const [availableVoices, setAvailableVoices] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchVoices = async () => {
+      const standard = VOICE_OPTIONS.map(v => ({...v, type: 'standard'}));
+      const approvedList = await getApprovedVoices();
+      const approved = approvedList.map(v => ({ value: v.id, label: `${v.name} (Comunidade)`, gender: 'Oficial', type: 'official' }));
+      
+      let privateVoices: any[] = [];
+      if (userEmail) {
+        const userVoices = await getVoicesByUser(userEmail);
+        privateVoices = userVoices
+          .filter(v => v.category === 'private' || v.category === 'official_approved')
+          .map(v => ({ 
+            value: v.id, 
+            label: `${v.name} (Minha Voz)`, 
+            gender: 'Privada', 
+            type: 'private' 
+          }));
+      }
+
+      const uniqueVoices = [...standard, ...approved];
+      privateVoices.forEach(pv => { 
+        if (!uniqueVoices.find(uv => uv.value === pv.value)) {
+          uniqueVoices.push(pv); 
+        }
+      });
+      
+      setAvailableVoices(uniqueVoices);
+    };
+    
+    fetchVoices();
   }, [userEmail]);
 
   return (

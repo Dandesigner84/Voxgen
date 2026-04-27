@@ -91,7 +91,7 @@ export const refineText = async (text: string, tone: ToneType | string, useBackg
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-1.5-flash',
       contents: prompt,
     });
     
@@ -116,7 +116,7 @@ export const addAutomaticSFX = async (text: string): Promise<string> => {
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-1.5-flash',
       contents: prompt,
     });
     return response.text?.trim() || text;
@@ -180,7 +180,7 @@ const callTTS = async (textChunk: string, voiceName: string, isCustom: boolean):
                 const mimeType = getMimeTypeFromBase64(customVoiceData.audioSampleBase64);
                 const base64Sample = customVoiceData.audioSampleBase64.split(',')[1] || customVoiceData.audioSampleBase64;
                 const response = await ai.models.generateContent({
-                    model: "gemini-3.1-flash-live-preview",
+                    model: "gemini-1.5-flash",
                     contents: {
                         parts: [
                             { inlineData: { mimeType: mimeType, data: base64Sample } },
@@ -192,7 +192,7 @@ const callTTS = async (textChunk: string, voiceName: string, isCustom: boolean):
                 return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
             } 
             const response = await ai.models.generateContent({
-                model: "gemini-3.1-flash-tts-preview",
+                model: "gemini-1.5-flash",
                 contents: [{ parts: [{ text: textChunk }] }],
                 config: {
                     responseModalities: [Modality.AUDIO],
@@ -264,7 +264,7 @@ export const generateSongMetadata = async (description: string, lyrics?: string)
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-1.5-flash',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -311,7 +311,7 @@ export const summarizeText = async (text: string): Promise<string> => {
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-1.5-flash',
       contents: prompt,
     });
     return response.text?.trim() || text;

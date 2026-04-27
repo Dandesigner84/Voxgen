@@ -118,7 +118,7 @@ service cloud.firestore {
 
     match /narrations/{narrationId} {
       allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (request.query.filters.userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
       allow create: if isVerified() && isValidId(narrationId) && isOwner(incoming().userId) && isValidNarration(incoming());
       allow update: if false; // Narrations are immutable
       allow delete: if isVerified() && (isOwner(existing().userId) || isAdmin());
