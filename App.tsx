@@ -323,8 +323,6 @@ const AppContent: React.FC = () => {
               <h1 className="font-bold text-lg hidden md:block">VoxGen AI</h1>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={() => alert("Função de Cadastro em breve!")} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded-full text-xs font-bold transition-all shadow-[0_0_15px_rgba(79,70,229,0.3)] hover:shadow-[0_0_20px_rgba(79,70,229,0.5)]">CADASTRO</button>
-            <div className="h-4 w-[1px] bg-slate-700 mx-1"></div>
             {isInstallable && (
                 <button onClick={handleInstallClick} className="bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-full text-xs flex items-center gap-2 transition-colors"><Smartphone size={14}/> <span className="hidden sm:inline">Instalar App</span></button>
             )}
