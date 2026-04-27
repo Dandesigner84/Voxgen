@@ -170,17 +170,25 @@ const callTTS = async (textChunk: string, voiceName: string, isCustom: boolean):
     const ai = getClient();
     const MAX_RETRIES = 5;
     let effectiveVoice = voiceName.split('-')[0];
-    const customVoiceData = !Object.values(VoiceName).includes(effectiveVoice as VoiceName) && !voiceName.includes('-') 
+    
+    // Safety mapping for Gemini Prebuilt Voices
+    const validGeminiVoices = ['Puck', 'Charon', 'Kore', 'Fenrir', 'Zephyr'];
+    if (!validGeminiVoices.includes(effectiveVoice) && !voiceName.includes('-')) {
+        // Fallback to Kore if voice is unknown
+    }
+
+    const customVoiceData = !validGeminiVoices.includes(effectiveVoice) && !voiceName.includes('-') 
         ? getCustomVoiceById(effectiveVoice) 
         : null;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
+            console.log(`[Gemini TTS] Attempt ${attempt} for voice: ${effectiveVoice}`);
             if (customVoiceData && customVoiceData.audioSampleBase64) {
                 const mimeType = getMimeTypeFromBase64(customVoiceData.audioSampleBase64);
                 const base64Sample = customVoiceData.audioSampleBase64.split(',')[1] || customVoiceData.audioSampleBase64;
                 const response = await ai.models.generateContent({
-                    model: "gemini-1.5-flash",
+                    model: "gemini-3.1-flash-live-preview",
                     contents: {
                         parts: [
                             { inlineData: { mimeType: mimeType, data: base64Sample } },
@@ -191,23 +199,32 @@ const callTTS = async (textChunk: string, voiceName: string, isCustom: boolean):
                 });
                 return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
             } 
+            
+            // Map to a valid voice if not standard
+            const finalVoice = validGeminiVoices.includes(effectiveVoice) ? effectiveVoice : 'Kore';
+            
             const response = await ai.models.generateContent({
-                model: "gemini-1.5-flash",
+                model: "gemini-3.1-flash-tts-preview",
                 contents: [{ parts: [{ text: textChunk }] }],
                 config: {
                     responseModalities: [Modality.AUDIO],
                     speechConfig: {
-                        voiceConfig: { prebuiltVoiceConfig: { voiceName: effectiveVoice } },
+                        voiceConfig: { prebuiltVoiceConfig: { voiceName: finalVoice } },
                     },
                 },
             });
             return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
         } catch (e: any) {
-            await wait(Math.pow(2, attempt) * 1000);
-            if (attempt === MAX_RETRIES) throw e;
+            const isQuotaError = e.message?.includes("RESOURCE_EXHAUSTED") || e.message?.includes("429");
+            const backoffTime = isQuotaError ? Math.pow(2, attempt) * 2000 : Math.pow(2, attempt) * 1000;
+            
+            console.warn(`[Gemini TTS] Attempt ${attempt} failed: ${e.message}. Retrying in ${backoffTime}ms...`);
+            await wait(backoffTime);
+            
+            if (attempt === MAX_RETRIES) throw new Error(`Gemini API Quota/Error: ${e.message || "Unknown error"}`);
         }
     }
-    throw new Error("Falha no TTS.");
+    throw new Error("Falha ao chamar API Gemini após múltiplas tentativas.");
 };
 
 export const generateSpeech = async (rawText: string, voice: string): Promise<string> => {
@@ -220,6 +237,10 @@ export const generateSpeech = async (rawText: string, voice: string): Promise<st
   for (const part of parts) {
       const segment = part.trim();
       if (!segment) continue;
+      
+      // Delay to avoid hitting rate limits on rapid sequential calls
+      await wait(300);
+
       if (segment.startsWith('(') && segment.endsWith(')')) {
           const keyword = segment.slice(1, -1);
           try {

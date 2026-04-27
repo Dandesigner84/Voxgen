@@ -77,7 +77,9 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
   
   const audioElRef = useRef<HTMLAudioElement | null>(null);
   const ytPlayerRef = useRef<any>(null);
-  const gainNodeRef = useRef<GainNode | null>(null);
+  const trackGainNodeRef = useRef<GainNode | null>(null); // Renamed from gainNodeRef for clarity
+  const masterBusGainRef = useRef<GainNode | null>(null);
+  const limiterNodeRef = useRef<DynamicsCompressorNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isNarratingRef = useRef(false);
@@ -149,17 +151,34 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
     audio.crossOrigin = "anonymous";
     audioElRef.current = audio;
 
-    const source = ctx.createMediaElementSource(audio);
-    const gain = ctx.createGain();
+    const trackSource = ctx.createMediaElementSource(audio);
+    const trackGain = ctx.createGain();
+    const masterBus = ctx.createGain();
+    const limiter = ctx.createDynamicsCompressor();
     const analyser = ctx.createAnalyser();
     
+    // Configura Limiter (Previne Estouro/Clipping)
+    limiter.threshold.setValueAtTime(-1.5, ctx.currentTime); // Começa a limitar em -1.5dB
+    limiter.knee.setValueAtTime(30, ctx.currentTime); // Curva suave
+    limiter.ratio.setValueAtTime(12, ctx.currentTime); // Compressão moderada/forte
+    limiter.attack.setValueAtTime(0.003, ctx.currentTime); // Rápido
+    limiter.release.setValueAtTime(0.25, ctx.currentTime);
+    
     analyser.fftSize = 256;
-    gain.gain.value = 1.2; 
-    source.connect(gain);
-    gain.connect(analyser);
+    trackGain.gain.value = 0.9; // Volume base da playlist ligeiramente abaixo do teto
+    masterBus.gain.value = 1.0;
+
+    // Conexões
+    trackSource.connect(trackGain);
+    trackGain.connect(masterBus);
+    
+    masterBus.connect(limiter);
+    limiter.connect(analyser);
     analyser.connect(ctx.destination);
     
-    gainNodeRef.current = gain;
+    trackGainNodeRef.current = trackGain;
+    masterBusGainRef.current = masterBus;
+    limiterNodeRef.current = limiter;
     analyserRef.current = analyser;
 
     // Inicialização segura da API do YouTube
@@ -390,7 +409,14 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       
       const source = ctx.createBufferSource();
       source.buffer = vignetteBufferRef.current;
-      source.connect(ctx.destination);
+      
+      // Conecta ao master bus com limiter
+      if (masterBusGainRef.current) {
+          source.connect(masterBusGainRef.current);
+      } else {
+          source.connect(ctx.destination);
+      }
+
       source.onended = () => {
           console.log("[SmartPlayer] Vinheta finalizada.");
           setIsVignettePlaying(false);
@@ -428,9 +454,9 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       if (track.type === 'file') {
           if (audioElRef.current) {
               if (audioElRef.current.src !== track.src) audioElRef.current.src = track.src;
-              if (gainNodeRef.current) {
+              if (trackGainNodeRef.current) {
                   // Respeita se houver uma narração em curso
-                  gainNodeRef.current.gain.value = isNarratingRef.current ? 0.1 : 1.2;
+                  trackGainNodeRef.current.gain.value = isNarratingRef.current ? 0.1 : 0.9;
               }
               
               audioElRef.current.onerror = () => {
@@ -698,8 +724,8 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       source.buffer = buffer;
       const voiceGain = ctx.createGain();
       
-      // Aumentar narração para destaque máximo (120% solicitado)
-      voiceGain.gain.value = isSmartEqEnabledRef.current ? 1.2 : 1.0; 
+      // Volume da narração - O limiter agora cuida de não estourar
+      voiceGain.gain.value = isSmartEqEnabledRef.current ? 1.4 : 1.0; 
 
       if (isSmartEqEnabledRef.current) {
           // Efeito Stereo Widening (Haas Effect)
@@ -717,8 +743,13 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
           source.connect(voiceGain);
       }
 
-      voiceGain.connect(ctx.destination);
-      if (analyserRef.current) voiceGain.connect(analyserRef.current);
+      // Conecta ao Master Bus (com Limiter)
+      if (masterBusGainRef.current) {
+          voiceGain.connect(masterBusGainRef.current);
+      } else {
+          voiceGain.connect(ctx.destination);
+      }
+
       narrationSourceNodeRef.current = source;
       
       source.onended = () => {
@@ -747,14 +778,16 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       const ctx = initAudioContext();
       console.log(`[SmartPlayer] Ducking: baixando playlist para 10% em ${duration}s`);
       
-      if (gainNodeRef.current) {
-          gainNodeRef.current.gain.cancelScheduledValues(ctx.currentTime);
-          gainNodeRef.current.gain.setValueAtTime(gainNodeRef.current.gain.value, ctx.currentTime);
-          gainNodeRef.current.gain.linearRampToValueAtTime(0.1, ctx.currentTime + duration);
+      if (trackGainNodeRef.current) {
+          trackGainNodeRef.current.gain.cancelScheduledValues(ctx.currentTime);
+          trackGainNodeRef.current.gain.setValueAtTime(trackGainNodeRef.current.gain.value, ctx.currentTime);
+          trackGainNodeRef.current.gain.linearRampToValueAtTime(0.08, ctx.currentTime + duration);
       }
       if (ytPlayerRef.current && typeof ytPlayerRef.current.getVolume === 'function') {
-          const currentVol = ytPlayerRef.current.getVolume();
-          fadeYouTubeVolume(currentVol, 10, duration * 1000);
+          try {
+            const currentVol = ytPlayerRef.current.getVolume();
+            fadeYouTubeVolume(currentVol, 8, duration * 1000);
+          } catch(e) {}
       }
   };
 
@@ -763,14 +796,16 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       const ctx = initAudioContext();
       console.log(`[SmartPlayer] Ducking: restaurando playlist para 100% em ${duration}s`);
       
-      if (gainNodeRef.current) {
-          gainNodeRef.current.gain.cancelScheduledValues(ctx.currentTime);
-          gainNodeRef.current.gain.setValueAtTime(gainNodeRef.current.gain.value, ctx.currentTime);
-          gainNodeRef.current.gain.linearRampToValueAtTime(1.0, ctx.currentTime + duration);
+      if (trackGainNodeRef.current) {
+          trackGainNodeRef.current.gain.cancelScheduledValues(ctx.currentTime);
+          trackGainNodeRef.current.gain.setValueAtTime(trackGainNodeRef.current.gain.value, ctx.currentTime);
+          trackGainNodeRef.current.gain.linearRampToValueAtTime(0.9, ctx.currentTime + duration);
       }
       if (ytPlayerRef.current && typeof ytPlayerRef.current.getVolume === 'function') {
-          const currentVol = ytPlayerRef.current.getVolume();
-          fadeYouTubeVolume(currentVol, 100, duration * 1000);
+          try {
+            const currentVol = ytPlayerRef.current.getVolume();
+            fadeYouTubeVolume(currentVol, 90, duration * 1000); // 90% is safer for YouTube to avoid its internal clipping
+          } catch(e) {}
       }
   };
 
