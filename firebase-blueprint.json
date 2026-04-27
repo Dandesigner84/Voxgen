@@ -7,12 +7,17 @@
       "properties": {
         "email": { "type": "string" },
         "name": { "type": "string" },
+        "phoneNumber": { "type": "string" },
         "role": { "type": "string", "enum": ["user", "admin", "corporate-admin", "corporate-user"] },
         "plan": { "type": "string", "enum": ["free", "premium"] },
         "expiryDate": { "type": "number" },
         "narrationsToday": { "type": "number" },
         "createdAt": { "type": "number" },
-        "lastUsageDate": { "type": "string" }
+        "lastUsageDate": { "type": "string" },
+        "isProfileComplete": { "type": "boolean" },
+        "segment": { "type": "string" },
+        "goal": { "type": "string" },
+        "referral": { "type": "string" }
       },
       "required": ["email", "role"]
     },

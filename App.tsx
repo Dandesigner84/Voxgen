@@ -15,6 +15,7 @@ import PDFAudioModule from './components/PDFAudioModule';
 import AdminPanel from './components/AdminPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import Login from './components/Login';
+import Onboarding from './components/Onboarding';
 import VoiceAssistant from './components/VoiceAssistant';
 import { AudioItem, ProcessingState, ToneType, VoiceName, AppMode, UserRole, UserSession } from './types';
 import { DEFAULT_TEXT, VIGNETTE_TEXT } from './constants';
@@ -47,7 +48,8 @@ const AppContent: React.FC = () => {
                 setUser({
                     email: firebaseUser.email || '',
                     role: data.role as UserRole,
-                    companyName: data.companyName
+                    companyName: data.companyName,
+                    isProfileComplete: data.isProfileComplete ?? true // Default true for legacy users
                 });
             } else {
                 // Create user doc if missing
@@ -288,6 +290,17 @@ const AppContent: React.FC = () => {
   }
 
   if (!user) return <Login onLogin={handleLogin} />;
+
+  if (user && user.isProfileComplete === false && mode !== AppMode.Admin) {
+    return (
+      <Onboarding 
+        uid={auth.currentUser?.uid || ''} 
+        onComplete={() => {
+          setUser(prev => prev ? { ...prev, isProfileComplete: true } : null);
+        }} 
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-[#0f172a] text-slate-200 font-sans relative">

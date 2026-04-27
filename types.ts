@@ -133,10 +133,15 @@ export interface UserProfile {
   createdAt: number;
   expiryDate?: number | null;
   companyName?: string;
+  isProfileComplete?: boolean;
+  segment?: string;
+  goal?: string;
+  referral?: string;
 }
 
 export interface UserSession {
   role: UserRole;
   email: string;
   companyName?: string;
+  isProfileComplete?: boolean;
 }

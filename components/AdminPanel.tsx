@@ -304,7 +304,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ userRole = 'admin', userEmail }
                                 {(u.name || u.email || '?')[0].toUpperCase()}
                               </div>
                               <div>
-                                <p className="text-sm font-bold text-white">{u.name || 'Sem Nome'}</p>
+                                <p className="text-sm font-bold text-white flex items-center gap-2">
+                                  {u.name || 'Sem Nome'}
+                                  {!u.isProfileComplete && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title="Perfil Incompleto" />}
+                                </p>
                                 <p className="text-[10px] text-slate-500 font-mono">{u.uid.substring(0, 8)}...</p>
                               </div>
                             </div>
@@ -313,6 +316,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ userRole = 'admin', userEmail }
                             <div className="space-y-1">
                               {u.email && <div className="flex items-center gap-2 text-xs text-slate-300"><Mail size={12} className="text-slate-500" /> {u.email}</div>}
                               {u.phoneNumber && <div className="flex items-center gap-2 text-xs text-slate-300"><Phone size={12} className="text-slate-500" /> {u.phoneNumber}</div>}
+                              <div className="flex items-center gap-2 text-[10px] text-slate-500 font-bold uppercase">
+                                {u.segment || 'Sem Segmento'} • {u.goal || 'Sem Objetivo'}
+                              </div>
                             </div>
                           </td>
                           <td className="px-6 py-4 text-center">

@@ -40,7 +40,11 @@ service cloud.firestore {
              (data.get('expiryDate', 0) is number) &&
              (data.get('narrationsToday', 0) is number) &&
              (data.get('createdAt', 0) is number) &&
-             (data.get('lastUsageDate', '') is string);
+             (data.get('lastUsageDate', '') is string) &&
+             (data.get('segment', '') is string) &&
+             (data.get('goal', '') is string) &&
+             (data.get('referral', '') is string) &&
+             (data.get('isProfileComplete', true) is bool);
     }
 
     function isValidPremiumCode(data) {
@@ -71,7 +75,7 @@ service cloud.firestore {
           // Allow updating plan related fields during redemption or normal usage
           incoming().role == existing().role &&
           incoming().email == existing().email &&
-          incoming().diff(existing()).affectedKeys().hasAny(['name', 'narrationsToday', 'lastUsageDate', 'role', 'email', 'plan', 'expiryDate', 'createdAt'])
+          incoming().diff(existing()).affectedKeys().hasAny(['name', 'narrationsToday', 'lastUsageDate', 'role', 'email', 'plan', 'expiryDate', 'createdAt', 'isProfileComplete', 'segment', 'goal', 'referral', 'phoneNumber'])
         )
       );
       allow delete: if isAdmin();

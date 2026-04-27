@@ -59,7 +59,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         role: role,
         plan: 'free',
         narrationsToday: 0,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        isProfileComplete: false
       };
       await setDoc(userDocRef, userData);
       
