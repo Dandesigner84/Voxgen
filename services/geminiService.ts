@@ -341,3 +341,43 @@ export const summarizeText = async (text: string): Promise<string> => {
     return text;
   }
 };
+
+export const searchYouTube = async (query: string): Promise<{id: string, name: string}[]> => {
+  if (!query.trim()) return [];
+  const ai = getClient();
+
+  const prompt = `
+    Agir como um localizador de vídeos do YouTube.
+    Busque os 5 vídeos mais relevantes no YouTube para a pesquisa: "${query}".
+    
+    Retorne APENAS um JSON array de objetos com:
+    - id: O ID de 11 caracteres do vídeo do YouTube
+    - name: O título do vídeo
+    
+    Exemplo de retorno:
+    [{"id": "dQw4w9WgXcQ", "name": "Rick Astley - Never Gonna Give You Up"}]
+    
+    Apenas JSON. Nada mais.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      // Habilitar busca para obter IDs reais e atualizados
+      tools: [{ googleSearchRetrieval: {} }] as any
+    });
+
+    const text = response.text || "";
+    // Extrair JSON do retorno (pode vir com markdown)
+    const jsonMatch = text.match(/\[\s*\{.*\}\s*\]/s);
+    if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+    }
+    
+    return [];
+  } catch (e) {
+    console.error("Erro ao buscar no YouTube via IA:", e);
+    return [];
+  }
+};

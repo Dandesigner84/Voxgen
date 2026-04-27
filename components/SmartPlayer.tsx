@@ -5,7 +5,7 @@ import { AudioItem, UserRole } from '../types';
 import { isSmartPlayerUnlocked } from '../services/monetizationService';
 import { usePlatformDetection } from '../hooks/usePlatformDetection';
 import { getCorporatePlaylist, saveCorporatePlaylist } from '../services/corporateService';
-import { generateSpeech } from '../services/geminiService';
+import { generateSpeech, searchYouTube } from '../services/geminiService';
 import { decodeAudioData, audioBufferToWav } from '../utils/audioUtils';
 import { VIGNETTE_TEXT } from '../constants';
 
@@ -72,6 +72,9 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
   const [pendingUploads, setPendingUploads] = useState<PendingFile[]>([]);
   const [isProcessingUploads, setIsProcessingUploads] = useState(false);
   const [selectedNarrationIds, setSelectedNarrationIds] = useState<string[]>([]);
+  const [searchResults, setSearchResults] = useState<{id: string, name: string}[]>([]);
+  const [isSearchingYT, setIsSearchingYT] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [nextNarrationTimeDisplay, setNextNarrationTimeDisplay] = useState<string>('--:--');
   const [isNarratingUI, setIsNarratingUI] = useState(false);
   
@@ -158,14 +161,14 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
     const analyser = ctx.createAnalyser();
     
     // Configura Limiter (Previne Estouro/Clipping)
-    limiter.threshold.setValueAtTime(-1.5, ctx.currentTime); // Começa a limitar em -1.5dB
-    limiter.knee.setValueAtTime(30, ctx.currentTime); // Curva suave
-    limiter.ratio.setValueAtTime(12, ctx.currentTime); // Compressão moderada/forte
+    limiter.threshold.setValueAtTime(-2.0, ctx.currentTime); // Começa a limitar em -2.0dB
+    limiter.knee.setValueAtTime(40, ctx.currentTime); // Curva suave
+    limiter.ratio.setValueAtTime(20, ctx.currentTime); // Compressão forte (Hard Limiter)
     limiter.attack.setValueAtTime(0.003, ctx.currentTime); // Rápido
     limiter.release.setValueAtTime(0.25, ctx.currentTime);
     
     analyser.fftSize = 256;
-    trackGain.gain.value = 0.9; // Volume base da playlist ligeiramente abaixo do teto
+    trackGain.gain.value = 0.7; // Volume base da playlist reduzido para dar espaço à narração
     masterBus.gain.value = 1.0;
 
     // Conexões
@@ -456,7 +459,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
               if (audioElRef.current.src !== track.src) audioElRef.current.src = track.src;
               if (trackGainNodeRef.current) {
                   // Respeita se houver uma narração em curso
-                  trackGainNodeRef.current.gain.value = isNarratingRef.current ? 0.1 : 0.9;
+                  trackGainNodeRef.current.gain.value = isNarratingRef.current ? 0.04 : 0.7;
               }
               
               audioElRef.current.onerror = () => {
@@ -724,8 +727,8 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       source.buffer = buffer;
       const voiceGain = ctx.createGain();
       
-      // Volume da narração - O limiter agora cuida de não estourar
-      voiceGain.gain.value = isSmartEqEnabledRef.current ? 1.4 : 1.0; 
+      // Volume da narração - O limiter agora cuida de não estourar. Aumentado para 1.8x
+      voiceGain.gain.value = isSmartEqEnabledRef.current ? 1.8 : 1.0; 
 
       if (isSmartEqEnabledRef.current) {
           // Efeito Stereo Widening (Haas Effect)
@@ -781,12 +784,12 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       if (trackGainNodeRef.current) {
           trackGainNodeRef.current.gain.cancelScheduledValues(ctx.currentTime);
           trackGainNodeRef.current.gain.setValueAtTime(trackGainNodeRef.current.gain.value, ctx.currentTime);
-          trackGainNodeRef.current.gain.linearRampToValueAtTime(0.08, ctx.currentTime + duration);
+          trackGainNodeRef.current.gain.linearRampToValueAtTime(0.04, ctx.currentTime + duration);
       }
       if (ytPlayerRef.current && typeof ytPlayerRef.current.getVolume === 'function') {
           try {
             const currentVol = ytPlayerRef.current.getVolume();
-            fadeYouTubeVolume(currentVol, 8, duration * 1000);
+            fadeYouTubeVolume(currentVol, 4, duration * 1000);
           } catch(e) {}
       }
   };
@@ -799,12 +802,12 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       if (trackGainNodeRef.current) {
           trackGainNodeRef.current.gain.cancelScheduledValues(ctx.currentTime);
           trackGainNodeRef.current.gain.setValueAtTime(trackGainNodeRef.current.gain.value, ctx.currentTime);
-          trackGainNodeRef.current.gain.linearRampToValueAtTime(0.9, ctx.currentTime + duration);
+          trackGainNodeRef.current.gain.linearRampToValueAtTime(0.7, ctx.currentTime + duration);
       }
       if (ytPlayerRef.current && typeof ytPlayerRef.current.getVolume === 'function') {
           try {
             const currentVol = ytPlayerRef.current.getVolume();
-            fadeYouTubeVolume(currentVol, 90, duration * 1000); // 90% is safer for YouTube to avoid its internal clipping
+            fadeYouTubeVolume(currentVol, 70, duration * 1000); // 70% is safer for YouTube to avoid its internal clipping
           } catch(e) {}
       }
   };
@@ -836,6 +839,33 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
           setPlaylist(prev => [...prev, { id: crypto.randomUUID(), type: 'spotify', name: `Spotify ${match[1]}`, src: `https://open.spotify.com/embed/${match[1]}/${match[2]}?utm_source=generator&theme=0`, thumbnail: '' }]);
           setWebInput('');
       } else { alert("Link inválido ou não suportado. Use links diretos de vídeo do YouTube ou faixas do Spotify."); }
+  };
+
+  const handleSearchYT = async () => {
+      if (!searchQuery.trim()) return;
+      setIsSearchingYT(true);
+      setSearchResults([]);
+      try {
+          const results = await searchYouTube(searchQuery);
+          setSearchResults(results);
+          if (results.length === 0) alert("Nenhum resultado encontrado.");
+      } catch (e) {
+          alert("Erro ao pesquisar no YouTube.");
+      } finally {
+          setIsSearchingYT(false);
+      }
+  };
+
+  const addYTSearchTrack = (id: string, name: string) => {
+      setPlaylist(prev => [...prev, { 
+          id: crypto.randomUUID(), 
+          type: 'youtube', 
+          name: name, 
+          src: id, 
+          thumbnail: `https://img.youtube.com/vi/${id}/0.jpg` 
+      }]);
+      setSearchResults([]);
+      setSearchQuery('');
   };
 
   const getSpotifySrc = () => {
@@ -1034,9 +1064,60 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                 </div>
                 <div className="space-y-4 mb-6">
                     <div className="flex gap-2">
-                        <input type="text" value={webInput} onChange={(e) => setWebInput(e.target.value)} placeholder="YouTube / Spotify Link..." className="w-full bg-slate-800 border border-slate-700 rounded-lg py-2 px-4 text-sm text-white outline-none" />
-                        <button onClick={addWebLink} className="bg-indigo-600 text-white px-4 rounded-lg"><Link size={18} /></button>
-                        <button onClick={triggerUpload} className="bg-slate-700 text-white px-4 rounded-lg h-full flex items-center justify-center"><FileAudio size={18} /></button>
+                        <input type="text" value={webInput} onChange={(e) => setWebInput(e.target.value)} placeholder="Link Direto (YouTube/Spotify)..." className="w-full bg-slate-800 border border-slate-700 rounded-lg py-2 px-4 text-sm text-white outline-none" />
+                        <button onClick={addWebLink} className="bg-indigo-600 text-white px-4 rounded-lg" title="Adicionar por Link"><Link size={18} /></button>
+                        <button onClick={triggerUpload} className="bg-slate-700 text-white px-4 rounded-lg h-full flex items-center justify-center" title="Upload de Arquivo"><FileAudio size={18} /></button>
+                    </div>
+
+                    <div className="relative">
+                        <div className="flex gap-2">
+                            <div className="relative flex-1">
+                                <Youtube size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                                <input 
+                                    type="text" 
+                                    value={searchQuery} 
+                                    onChange={(e) => setSearchQuery(e.target.value)} 
+                                    onKeyDown={(e) => e.key === 'Enter' && handleSearchYT()}
+                                    placeholder="Pesquisar música no YouTube..." 
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg py-2 pl-10 pr-4 text-sm text-white outline-none focus:border-red-500/50 transition-colors" 
+                                />
+                            </div>
+                            <button 
+                                onClick={handleSearchYT} 
+                                disabled={isSearchingYT}
+                                className="bg-red-600 hover:bg-red-500 text-white px-4 rounded-lg flex items-center justify-center disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
+                                title="Pesquisar IA"
+                            >
+                                {isSearchingYT ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
+                            </button>
+                        </div>
+
+                        {searchResults.length > 0 && (
+                            <div className="absolute top-full left-0 right-0 z-30 mt-2 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden max-h-64 overflow-y-auto animate-in slide-in-from-top-2 duration-200">
+                                <div className="p-2 bg-slate-800/50 border-b border-slate-700 font-bold text-[10px] text-slate-400 uppercase tracking-wider flex justify-between items-center">
+                                    Resultados da IA
+                                    <button onClick={() => setSearchResults([])} className="text-slate-500 hover:text-white">Limpar</button>
+                                </div>
+                                {searchResults.map(result => (
+                                    <button 
+                                        key={result.id}
+                                        onClick={() => addYTSearchTrack(result.id, result.name)}
+                                        className="w-full flex items-start gap-3 p-3 hover:bg-slate-800 text-left transition-colors border-b border-slate-800 last:border-0 group"
+                                    >
+                                        <div className="relative shrink-0">
+                                            <img src={`https://img.youtube.com/vi/${result.id}/default.jpg`} className="w-16 h-10 rounded object-cover shadow-sm" alt="" />
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded">
+                                                <Music size={12} className="text-white" />
+                                            </div>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-xs text-white font-medium line-clamp-2 leading-tight group-hover:text-cyan-400 transition-colors">{result.name}</p>
+                                            <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-tighter">YouTube Video</p>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
                 <div className="h-64 overflow-y-auto custom-scrollbar space-y-2 pr-2">

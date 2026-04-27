@@ -14,6 +14,7 @@ import VoiceCloningStudio from './components/VoiceCloningStudio';
 import PDFAudioModule from './components/PDFAudioModule';
 import AdminPanel from './components/AdminPanel';
 import ErrorBoundary from './components/ErrorBoundary';
+import ReloadPrompt from './components/ReloadPrompt';
 import Login from './components/Login';
 import Onboarding from './components/Onboarding';
 import VoiceAssistant from './components/VoiceAssistant';
@@ -446,5 +447,10 @@ const AppContent: React.FC = () => {
   );
 };
 
-const App: React.FC = () => <ErrorBoundary><AppContent /></ErrorBoundary>;
+const App: React.FC = () => (
+    <ErrorBoundary>
+        <AppContent />
+        <ReloadPrompt />
+    </ErrorBoundary>
+);
 export default App;
