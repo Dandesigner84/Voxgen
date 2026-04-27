@@ -34,6 +34,9 @@ export const TONE_OPTIONS = [
   { value: ToneType.Storytelling, label: 'Storytelling & Contação' },
   { value: ToneType.Meditation, label: 'Meditação & Relaxamento' },
   { value: ToneType.Advertising, label: 'Varejo & Comercial' },
+  { value: ToneType.Motivation, label: 'Motivacional & Inspirador' },
+  { value: ToneType.News, label: 'Jornalístico / Noticiário' },
+  { value: ToneType.Review, label: 'Resenha / Review de Produto' },
 ];
 
 export const SFX_PRESETS = [

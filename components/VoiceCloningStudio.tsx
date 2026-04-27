@@ -38,7 +38,13 @@ const VoiceCloningStudio: React.FC<VoiceCloningStudioProps> = ({ audioContext, i
   const listAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    loadUserVoices();
+    const fetchVoices = async () => {
+      if (userEmail) {
+        const voices = await getVoicesByUser(userEmail);
+        setUserVoices(voices);
+      }
+    };
+    fetchVoices();
     // Cleanup URL object when component unmounts or blob changes
     return () => {
       if (audioUrl) URL.revokeObjectURL(audioUrl);
@@ -49,8 +55,9 @@ const VoiceCloningStudio: React.FC<VoiceCloningStudioProps> = ({ audioContext, i
     };
   }, [userEmail, activeTab]);
 
-  const loadUserVoices = () => {
-    setUserVoices(getVoicesByUser(userEmail));
+  const loadUserVoices = async () => {
+    const voices = await getVoicesByUser(userEmail);
+    setUserVoices(voices);
   };
 
   // --- Recording Logic ---

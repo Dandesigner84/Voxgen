@@ -11,11 +11,12 @@ service cloud.firestore {
     function isSignedIn() { return request.auth != null; }
     function isEmailVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
     function isPlatformAdmin() {
-      return isSignedIn() && request.auth.token.email == 'limadan389@gmail.com';
+      return isSignedIn() && request.auth.token.email == 'limadan389@gmail.com' && request.auth.token.email_verified == true;
     }
     function isAdmin() { 
       return isPlatformAdmin() || (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
     }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
     function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
@@ -55,6 +56,15 @@ service cloud.firestore {
              (data.get('redeemedBy', '') is string) &&
              (data.get('redeemedAt', 0) is number) &&
              (data.get('createdAt', 0) is number);
+    }
+
+    function isValidNarration(data) {
+      return data.keys().hasAll(['userId', 'text', 'voice', 'audioBase64', 'createdAt']) &&
+             data.userId is string &&
+             data.text is string && data.text.size() <= 10000 &&
+             data.voice is string &&
+             data.audioBase64 is string && data.audioBase64.size() <= 800000 &&
+             data.createdAt is number;
     }
 
     // --- Collection Rules ---
@@ -104,6 +114,14 @@ service cloud.firestore {
       allow read: if (resource.data.category == 'official_approved') || (isSignedIn() && (isOwner(resource.data.userId) || isAdmin()));
       allow create: if isSignedIn() && isValidId(voiceId) && isOwner(incoming().userId);
       allow update, delete: if isSignedIn() && isValidId(voiceId) && (isOwner(existing().userId) || isAdmin());
+    }
+
+    match /narrations/{narrationId} {
+      allow get: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin());
+      allow list: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin());
+      allow create: if isVerified() && isValidId(narrationId) && isOwner(incoming().userId) && isValidNarration(incoming());
+      allow update: if false; // Narrations are immutable
+      allow delete: if isVerified() && (isOwner(existing().userId) || isAdmin());
     }
   }
 }

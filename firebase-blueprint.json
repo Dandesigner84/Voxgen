@@ -72,6 +72,21 @@
         "audioSampleBase64": { "type": "string" },
         "createdAt": { "type": "number" }
       }
+    },
+    "SavedNarration": {
+      "title": "SavedNarration",
+      "description": "History of generated narrations for a user",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "text": { "type": "string" },
+        "voice": { "type": "string" },
+        "audioBase64": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "duration": { "type": "number" },
+        "tone": { "type": "string" }
+      },
+      "required": ["userId", "text", "voice", "audioBase64", "createdAt"]
     }
   },
   "firestore": {
@@ -90,6 +105,10 @@
     "/customVoices/{voiceId}": {
       "schema": "CustomVoice",
       "description": "Cloned voices for individual users"
+    },
+    "/narrations/{narrationId}": {
+      "schema": "SavedNarration",
+      "description": "History of generated narrations"
     }
   }
 }

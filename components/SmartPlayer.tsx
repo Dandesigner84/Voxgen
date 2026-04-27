@@ -750,7 +750,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       if (gainNodeRef.current) {
           gainNodeRef.current.gain.cancelScheduledValues(ctx.currentTime);
           gainNodeRef.current.gain.setValueAtTime(gainNodeRef.current.gain.value, ctx.currentTime);
-          gainNodeRef.current.gain.linearRampToValueAtTime(0.12, ctx.currentTime + duration);
+          gainNodeRef.current.gain.linearRampToValueAtTime(0.1, ctx.currentTime + duration);
       }
       if (ytPlayerRef.current && typeof ytPlayerRef.current.getVolume === 'function') {
           const currentVol = ytPlayerRef.current.getVolume();
@@ -766,7 +766,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       if (gainNodeRef.current) {
           gainNodeRef.current.gain.cancelScheduledValues(ctx.currentTime);
           gainNodeRef.current.gain.setValueAtTime(gainNodeRef.current.gain.value, ctx.currentTime);
-          gainNodeRef.current.gain.linearRampToValueAtTime(1.2, ctx.currentTime + duration);
+          gainNodeRef.current.gain.linearRampToValueAtTime(1.0, ctx.currentTime + duration);
       }
       if (ytPlayerRef.current && typeof ytPlayerRef.current.getVolume === 'function') {
           const currentVol = ytPlayerRef.current.getVolume();
@@ -888,7 +888,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
   return (
     <div className="max-w-6xl mx-auto w-full px-4 animate-fade-in pb-20 relative">
         <div id="youtube-player-hidden" className="fixed top-[-9999px] left-[-9999px] opacity-0 pointer-events-none"></div>
-        <input ref={fileInputRef} type="file" accept="audio/*" multiple className="hidden" onChange={handleFileSelect} />
+        <input ref={fileInputRef} type="file" accept="audio/*,.mpeg,.mpg" multiple className="hidden" onChange={handleFileSelect} />
         
         {pendingUploads.length > 0 && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in">

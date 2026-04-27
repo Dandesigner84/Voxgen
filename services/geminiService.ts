@@ -65,6 +65,12 @@ export const refineText = async (text: string, tone: ToneType | string, useBackg
       specificInstruction += " ESTILO SUSPENSE: Voz misteriosa, sussurrada em alguns momentos e com ritmo tenso. ";
   } else if (tone === ToneType.Meditation || tone === ToneType.Soothing) {
       specificInstruction += " ESTILO MEDITAÇÃO: Ritmo muito lento, tons de voz tranquilos e pausas longas entre frases. ";
+  } else if (tone === ToneType.Motivation) {
+      specificInstruction += " ESTILO MOTIVACIONAL: Inspirador, forte, com ênfase em palavras de ação e superação. ";
+  } else if (tone === ToneType.News) {
+      specificInstruction += " ESTILO JORNALÍSTICO: Objetivo, claro, com a cadência típica de âncoras de notícias. ";
+  } else if (tone === ToneType.Review) {
+      specificInstruction += " ESTILO REVIEW: Conversacional, honesto, detalhando características de um produto ou serviço. ";
   }
 
   const prompt = `

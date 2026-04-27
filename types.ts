@@ -27,6 +27,9 @@ export enum ToneType {
   Storytelling = 'Storytelling',
   Meditation = 'Meditation',
   Advertising = 'Advertising',
+  Motivation = 'Motivation',
+  News = 'News',
+  Review = 'Review',
 }
 
 export enum AppMode {

@@ -22,6 +22,7 @@ import { DEFAULT_TEXT, VIGNETTE_TEXT } from './constants';
 import { refineText, generateSpeech, addAutomaticSFX } from './services/geminiService';
 import { decodeAudioData, addBackgroundMusic } from './utils/audioUtils';
 import { canGenerateNarration, incrementUsage } from './services/monetizationService';
+import { saveNarration, getUserNarrations } from './services/narrationService';
 import { auth, db } from './services/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -50,8 +51,22 @@ const AppContent: React.FC = () => {
                     email: firebaseUser.email || '',
                     role: data.role as UserRole,
                     companyName: data.companyName,
-                    isProfileComplete: data.isProfileComplete ?? true // Default true for legacy users
+                    isProfileComplete: data.isProfileComplete === true // Force false if it's anything else
                 });
+
+                // Load History
+                if (audioContextRef.current) {
+                  const savedHistory = await getUserNarrations(firebaseUser.uid, audioContextRef.current);
+                  setHistory(savedHistory);
+                } else {
+                   // If audioContext not yet init, it will be loaded when needed or manually
+                   // Actually, for history we need a context to decode. 
+                   // We'll init it just for decoding if needed.
+                   const tempCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+                   const savedHistory = await getUserNarrations(firebaseUser.uid, tempCtx);
+                   setHistory(savedHistory);
+                   tempCtx.close();
+                }
             } else {
                 // Create user doc if missing
                 const role: UserRole = (firebaseUser.email === 'limadan389@gmail.com') ? 'admin' : 'user';
@@ -257,6 +272,11 @@ const AppContent: React.FC = () => {
         if (useMusic) { finalBuffer = await addBackgroundMusic(speechBuffer, selectedTone, ctx); }
         const newItem: AudioItem = { id: crypto.randomUUID(), text: text, voice: selectedVoice, audioData: finalBuffer, createdAt: new Date(), duration: finalBuffer.duration };
         setHistory(prev => [newItem, ...prev]);
+
+        // Persist to DB
+        if (auth.currentUser) {
+            saveNarration(auth.currentUser.uid, newItem, base64Data, selectedTone as string);
+        }
         
         // Monetization & Vignette Trigger
         let currentCount = 0;
