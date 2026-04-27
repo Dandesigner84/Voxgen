@@ -347,37 +347,36 @@ export const searchYouTube = async (query: string): Promise<{id: string, name: s
   const ai = getClient();
 
   const prompt = `
-    Agir como um localizador de vídeos do YouTube.
-    Busque os 5 vídeos mais relevantes no YouTube para a pesquisa: "${query}".
+    Find the 5 most popular or relevant YouTube videos for: "${query}".
+    Return the result as a raw JSON array of objects.
+    Each object MUST have:
+    - "id": the 11-character YouTube video ID
+    - "name": the title of the video
     
-    Retorne APENAS um JSON array de objetos com:
-    - id: O ID de 11 caracteres do vídeo do YouTube
-    - name: O título do vídeo
-    
-    Exemplo de retorno:
-    [{"id": "dQw4w9WgXcQ", "name": "Rick Astley - Never Gonna Give You Up"}]
-    
-    Apenas JSON. Nada mais.
+    CRITICAL: Output ONLY the valid JSON array. No markdown blocks, no explanations.
+    Example: [{"id": "dQw4w9WgXcQ", "name": "Rick Astley - Never Gonna Give You Up"}]
   `;
 
   try {
-    const response = await ai.models.generateContent({
+    const result = await ai.models.generateContent({
       model: 'gemini-1.5-flash',
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      // Habilitar busca para obter IDs reais e atualizados
       tools: [{ googleSearchRetrieval: {} }] as any
     });
 
-    const text = response.text || "";
-    // Extrair JSON do retorno (pode vir com markdown)
-    const jsonMatch = text.match(/\[\s*\{.*\}\s*\]/s);
-    if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+    const text = result.response.text();
+    // Try to find any JSON-like structure if the model adds fluff
+    const jsonStart = text.indexOf('[');
+    const jsonEnd = text.lastIndexOf(']') + 1;
+    
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+      const jsonStr = text.substring(jsonStart, jsonEnd);
+      return JSON.parse(jsonStr);
     }
     
     return [];
   } catch (e) {
-    console.error("Erro ao buscar no YouTube via IA:", e);
+    console.error("YouTube search failed:", e);
     return [];
   }
 };
