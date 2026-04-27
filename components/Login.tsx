@@ -19,6 +19,7 @@ import {
   ConfirmationResult
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { notifyNewRegistration } from '../services/notificationService';
 
 interface LoginProps {
   onLogin: (role: UserRole, email: string) => void;
@@ -51,7 +52,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     
     if (!userDoc.exists()) {
       const role: UserRole = (user.email === 'limadan389@gmail.com') ? 'admin' : 'user';
-      await setDoc(userDocRef, {
+      const userData = {
         email: user.email || '',
         phoneNumber: user.phoneNumber || '',
         name: user.displayName || 'Usuário',
@@ -59,7 +60,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         plan: 'free',
         narrationsToday: 0,
         createdAt: Date.now()
-      });
+      };
+      await setDoc(userDocRef, userData);
+      
+      // Notify Admin about new registration
+      notifyNewRegistration(userData);
+      
       return role;
     } else {
       return userDoc.data().role as UserRole;

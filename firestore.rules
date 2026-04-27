@@ -68,10 +68,9 @@ service cloud.firestore {
       );
       allow update: if (isOwner(userId) || isAdmin()) && isValidUser(incoming()) && (
         isAdmin() || (
-          // Allow updating certain fields, but for others (like role), they must remain unchanged
+          // Allow updating plan related fields during redemption or normal usage
           incoming().role == existing().role &&
           incoming().email == existing().email &&
-          (incoming().plan == existing().plan || isAdmin()) &&
           incoming().diff(existing()).affectedKeys().hasAny(['name', 'narrationsToday', 'lastUsageDate', 'role', 'email', 'plan', 'expiryDate', 'createdAt'])
         )
       );
@@ -85,7 +84,7 @@ service cloud.firestore {
         isSignedIn() && 
         !existing().isRedeemed && 
         incoming().isRedeemed == true &&
-        incoming().redeemedBy == request.auth.token.email &&
+        (incoming().redeemedBy == request.auth.token.email || incoming().redeemedBy == request.auth.token.phone_number) &&
         incoming().diff(existing()).affectedKeys().hasOnly(['isRedeemed', 'redeemedBy', 'redeemedAt'])
       )) && isValidPremiumCode(incoming());
       allow delete: if isAdmin();
