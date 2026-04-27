@@ -67,6 +67,27 @@ service cloud.firestore {
              data.createdAt is number;
     }
 
+    function isValidSession(data) {
+      return data.keys().hasAll(['userId', 'loginAt', 'date']) &&
+             data.userId is string &&
+             data.loginAt is number &&
+             data.date is string &&
+             (data.get('logoutAt', 0) is number) &&
+             (data.get('duration', 0) is number) &&
+             (data.get('toolsUsed', {}) is map);
+    }
+
+    function isValidFeedback(data) {
+      return data.keys().hasAll(['userId', 'rating', 'createdAt']) &&
+             data.userId is string &&
+             data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+             data.createdAt is number &&
+             (data.get('userName', '') is string) &&
+             (data.get('userEmail', '') is string) &&
+             (data.get('comment', '') is string) &&
+             (data.get('isHighlighted', false) is bool);
+    }
+
     // --- Collection Rules ---
 
     match /admins/{userId} {
@@ -122,6 +143,20 @@ service cloud.firestore {
       allow create: if isVerified() && isValidId(narrationId) && isOwner(incoming().userId) && isValidNarration(incoming());
       allow update: if false; // Narrations are immutable
       allow delete: if isVerified() && (isOwner(existing().userId) || isAdmin());
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && isOwner(incoming().userId) && isValidSession(incoming());
+      allow update: if isSignedIn() && (isOwner(existing().userId) || isAdmin()) && isValidSession(incoming());
+      allow delete: if isAdmin();
+    }
+
+    match /feedbacks/{feedbackId} {
+      allow read: if true;
+      allow create: if isVerified() && isOwner(incoming().userId) && isValidFeedback(incoming());
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
   }
 }

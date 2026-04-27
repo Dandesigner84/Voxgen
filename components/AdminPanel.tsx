@@ -24,10 +24,36 @@ import {
   Mail,
   Phone,
   Loader2,
-  LayoutDashboard
+  LayoutDashboard,
+  BarChart3,
+  MessageSquare,
+  Star,
+  Clock,
+  Eye,
+  EyeOff
 } from 'lucide-react';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer, 
+  AreaChart, 
+  Area,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts';
 import { generateCode, getStoredCodes, deleteCode } from '../services/monetizationService';
 import { getAllOfficialVoices, updateVoiceStatus, deleteCustomVoice } from '../services/voiceService';
+import { 
+  getSessionsMetrics, 
+  getAllFeedbacks, 
+  toggleFeedbackHighlight,
+  deleteFeedback
+} from '../services/analyticsService';
 import { 
   listAllUsers, 
   updateUserPlan, 
@@ -35,7 +61,7 @@ import {
   deleteUserAccount,
   getPlatformStats 
 } from '../services/adminService';
-import { PremiumCode, CustomVoice, UserRole, UserProfile } from '../types';
+import { PremiumCode, CustomVoice, UserRole, UserProfile, AnalyticsSession, UserFeedback } from '../types';
 
 interface AdminPanelProps {
   userRole?: UserRole;
@@ -45,7 +71,7 @@ interface AdminPanelProps {
 const AdminPanel: React.FC<AdminPanelProps> = ({ userRole = 'admin', userEmail }) => {
   const isSuperAdmin = userEmail === 'limadan389@gmail.com' || userRole === 'admin';
   
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'codes' | 'voices'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'codes' | 'voices' | 'analytics' | 'feedback'>('dashboard');
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'free' | 'premium'>('all');
@@ -55,6 +81,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ userRole = 'admin', userEmail }
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [codes, setCodes] = useState<PremiumCode[]>([]);
   const [voices, setVoices] = useState<CustomVoice[]>([]);
+  const [sessions, setSessions] = useState<AnalyticsSession[]>([]);
+  const [feedbacks, setFeedbacks] = useState<UserFeedback[]>([]);
   
   // Local Actions State
   const [daysToGen, setDaysToGen] = useState(30);
@@ -79,6 +107,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ userRole = 'admin', userEmail }
       } else if (activeTab === 'voices') {
         const allVoices = await getAllOfficialVoices();
         setVoices(allVoices);
+      } else if (activeTab === 'analytics') {
+        const platformSessions = await getSessionsMetrics();
+        setSessions(platformSessions);
+      } else if (activeTab === 'feedback') {
+        const allFeedbacks = await getAllFeedbacks();
+        setFeedbacks(allFeedbacks);
       }
     } catch (error) {
       console.error("Error loading admin data", error);
@@ -179,6 +213,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ userRole = 'admin', userEmail }
               className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'voices' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20' : 'hover:bg-slate-800 text-slate-400 hover:text-white'}`}
             >
               <Mic2 size={18} /> Narradores
+            </button>
+            <button 
+              onClick={() => setActiveTab('analytics')} 
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'analytics' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20' : 'hover:bg-slate-800 text-slate-400 hover:text-white'}`}
+            >
+              <BarChart3 size={18} /> Analytics
+            </button>
+            <button 
+              onClick={() => setActiveTab('feedback')} 
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'feedback' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20' : 'hover:bg-slate-800 text-slate-400 hover:text-white'}`}
+            >
+              <MessageSquare size={18} /> Feedback
             </button>
           </nav>
 
@@ -475,7 +521,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ userRole = 'admin', userEmail }
             </div>
           )}
 
-          {/* Voices Section (Re-used existing logic but improved UI) */}
+          {/* Voices Section */}
           {activeTab === 'voices' && (
             <div className="animate-fade-in space-y-8">
                <div className="bg-gradient-to-br from-indigo-900/20 to-transparent border border-indigo-500/20 p-8 rounded-3xl">
@@ -556,6 +602,217 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ userRole = 'admin', userEmail }
                       <Mic2 size={48} className="opacity-10 mb-4" />
                       <p className="text-slate-500 font-bold">Nenhum narrador encontrado para moderação</p>
                    </div>
+                 )}
+               </div>
+            </div>
+          )}
+
+          {/* Analytics Section */}
+          {activeTab === 'analytics' && (
+            <div className="animate-fade-in space-y-8 pb-20">
+              <div className="flex justify-between items-center bg-slate-900 p-8 border border-slate-800 rounded-3xl">
+                <div>
+                   <h2 className="text-2xl font-black text-white tracking-tight">Analytics de Engajamento</h2>
+                   <p className="text-slate-500 text-sm">Métricas de tempo de uso e popularidade das ferramentas</p>
+                </div>
+                <div className="flex gap-4">
+                  <div className="text-right">
+                    <p className="text-[10px] uppercase font-black text-slate-500">Total sessões</p>
+                    <p className="text-xl font-black text-white">{sessions.length}</p>
+                  </div>
+                  <div className="h-10 w-[1px] bg-slate-800"></div>
+                  <div className="text-right">
+                    <p className="text-[10px] uppercase font-black text-slate-500">Média sessão</p>
+                    <p className="text-xl font-black text-white">
+                      {Math.round(sessions.reduce((acc, s) => acc + (s.duration || 0), 0) / (sessions.length || 1) / 60)} min
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                {/* Usage Time Chart */}
+                <div className="bg-slate-900/50 border border-slate-800 p-8 rounded-3xl">
+                  <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                    <Clock size={16} /> Atividade por Dia (Segundos)
+                  </h3>
+                  <div className="h-[300px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={
+                        Object.entries(sessions.reduce((acc, s) => {
+                          acc[s.date] = (acc[s.date] || 0) + (s.duration || 0);
+                          return acc;
+                        }, {} as {[key: string]: number}))
+                        .map(([date, duration]) => ({ date: date.split('-').slice(1).join('/'), value: duration }))
+                        .sort((a,b) => a.date.localeCompare(b.date))
+                        .slice(-7)
+                      }>
+                        <defs>
+                          <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.8}/>
+                            <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <XAxis dataKey="date" stroke="#475569" fontSize={10} tickLine={false} axisLine={false} />
+                        <YAxis stroke="#475569" fontSize={10} tickLine={false} axisLine={false} />
+                        <Tooltip 
+                           contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '12px' }}
+                           itemStyle={{ color: '#818cf8', fontWeight: 'bold' }}
+                        />
+                        <Area type="monotone" dataKey="value" stroke="#6366f1" fillOpacity={1} fill="url(#colorVal)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Popularity Chart */}
+                <div className="bg-slate-900/50 border border-slate-800 p-8 rounded-3xl">
+                  <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                    <TrendingUp size={16} /> Ferramentas mais Utilizadas
+                  </h3>
+                  <div className="h-[300px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={
+                        Object.entries(sessions.reduce((acc, s) => {
+                          Object.entries(s.toolsUsed || {}).forEach(([tool, dur]) => {
+                            acc[tool] = (acc[tool] || 0) + dur;
+                          });
+                          return acc;
+                        }, {} as {[key: string]: number}))
+                        .map(([name, value]) => ({ name, value }))
+                        .sort((a,b) => b.value - a.value)
+                      } layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={true} vertical={false} />
+                        <XAxis type="number" hide />
+                        <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={10} width={80} />
+                        <Tooltip 
+                           cursor={{fill: 'transparent'}}
+                           contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '12px' }}
+                           itemStyle={{ color: '#fbbf24', fontWeight: 'bold' }}
+                        />
+                        <Bar dataKey="value" fill="#fbbf24" radius={[0, 4, 4, 0]} barSize={20} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+
+               {/* Sessions List */}
+               <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden">
+                  <div className="p-6 border-b border-slate-800 bg-slate-800/20">
+                     <h3 className="text-sm font-black text-white uppercase tracking-widest">Últimos Acessos</h3>
+                  </div>
+                  <div className="overflow-x-auto">
+                     <table className="w-full text-left">
+                        <thead>
+                           <tr className="border-b border-slate-800">
+                              <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase">Usuário</th>
+                              <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase">Data</th>
+                              <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase">Login</th>
+                              <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase">Duração</th>
+                              <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase">Ferramentas</th>
+                           </tr>
+                        </thead>
+                        <tbody>
+                           {sessions.slice(0, 10).map(s => (
+                              <tr key={s.id} className="border-b border-slate-800/50 hover:bg-slate-800/10 transition-colors">
+                                 <td className="px-6 py-4 text-xs font-mono text-slate-400">{s.userId.substring(0, 10)}...</td>
+                                 <td className="px-6 py-4 text-xs text-white">{s.date}</td>
+                                 <td className="px-6 py-4 text-xs text-slate-400">{new Date(s.loginAt).toLocaleTimeString()}</td>
+                                 <td className="px-6 py-4 text-xs font-bold text-indigo-400">{Math.round((s.duration || 0) / 60)} min</td>
+                                 <td className="px-6 py-4">
+                                    <div className="flex gap-1 flex-wrap">
+                                       {Object.keys(s.toolsUsed || {}).map(tool => (
+                                          <span key={tool} className="text-[8px] bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700 text-slate-300 font-bold">{tool}</span>
+                                       ))}
+                                    </div>
+                                 </td>
+                              </tr>
+                           ))}
+                        </tbody>
+                     </table>
+                  </div>
+               </div>
+            </div>
+          )}
+
+          {/* Feedback Section */}
+          {activeTab === 'feedback' && (
+            <div className="animate-fade-in space-y-8">
+               <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl flex flex-col md:flex-row justify-between items-center gap-6">
+                  <div>
+                     <h2 className="text-2xl font-black text-white tracking-tight">Avaliações e Depoimentos</h2>
+                     <p className="text-slate-500 text-sm">Gerencie o feedback dos usuários e destaque os melhores</p>
+                  </div>
+                  <div className="flex items-center gap-2 bg-indigo-500/10 px-4 py-2 rounded-2xl border border-indigo-500/20">
+                     <Star size={20} className="text-amber-500 fill-amber-500" />
+                     <span className="text-xl font-black text-white">
+                       {(feedbacks.reduce((acc, f) => acc + f.rating, 0) / (feedbacks.length || 1)).toFixed(1)}
+                     </span>
+                     <span className="text-xs text-slate-500 ml-2 font-bold uppercase tracking-widest">Global Score</span>
+                  </div>
+               </div>
+
+               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                 {feedbacks.map(f => (
+                   <div key={f.id} className={`bg-slate-900 border border-slate-800 p-6 rounded-3xl relative group hover:border-slate-700 transition-all ${f.isHighlighted ? 'ring-2 ring-indigo-500' : ''}`}>
+                      {f.isHighlighted && (
+                         <div className="absolute -top-3 left-6 px-3 py-1 bg-indigo-600 rounded-full text-[8px] font-black uppercase text-white shadow-lg tracking-widest">Destaque Exibido</div>
+                      )}
+                      
+                      <div className="flex justify-between items-start mb-4">
+                         <div className="flex items-center gap-3">
+                            <div className="p-2 bg-slate-800 rounded-xl text-slate-400">
+                               {f.userName?.[0].toUpperCase() || 'U'}
+                            </div>
+                            <div>
+                               <h4 className="font-bold text-white text-sm">{f.userName || 'Usuário Anônimo'}</h4>
+                               <p className="text-[10px] text-slate-500">{f.userEmail}</p>
+                            </div>
+                         </div>
+                         <div className="flex gap-1">
+                            {[...Array(5)].map((_, i) => (
+                               <Star key={i} size={12} className={i < f.rating ? 'text-amber-500 fill-amber-500' : 'text-slate-800'} />
+                            ))}
+                         </div>
+                      </div>
+
+                      <p className="text-sm text-slate-300 leading-relaxed min-h-[60px] italic">"{f.comment}"</p>
+                      
+                      <div className="mt-6 pt-4 border-t border-slate-800 flex justify-between items-center">
+                         <p className="text-[9px] text-slate-600 font-bold uppercase">{new Date(f.createdAt).toLocaleDateString()}</p>
+                         <div className="flex gap-2">
+                           <button 
+                             onClick={async () => {
+                               await toggleFeedbackHighlight(f.id!, !f.isHighlighted);
+                               loadData();
+                             }}
+                             className={`p-2 rounded-lg border transition-all ${f.isHighlighted ? 'bg-indigo-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'}`}
+                             title={f.isHighlighted ? "Remover Destaque" : "Destacar no Smart Player"}
+                           >
+                             {f.isHighlighted ? <EyeOff size={16} /> : <Eye size={16} />}
+                           </button>
+                           <button 
+                             onClick={async () => {
+                               if (confirm("Excluir avaliação?")) {
+                                 await deleteFeedback(f.id!);
+                                 loadData();
+                               }
+                             }}
+                             className="p-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-400 hover:text-red-400 transition-all"
+                           >
+                             <Trash2 size={16} />
+                           </button>
+                         </div>
+                      </div>
+                   </div>
+                 ))}
+
+                 {feedbacks.length === 0 && (
+                    <div className="col-span-full py-20 text-center flex flex-col items-center opacity-30">
+                       <MessageSquare size={48} className="mb-4" />
+                       <p className="font-bold">Nenhuma avaliação recebida ainda</p>
+                    </div>
                  )}
                </div>
             </div>

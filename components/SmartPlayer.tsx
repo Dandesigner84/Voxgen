@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Radio, Upload, Play, Pause, SkipForward, Mic2, Clock, Youtube, Trash2, Link, Smartphone, Music, CheckSquare, Square, Lock, Sliders, Volume2, CloudUpload, Repeat, Repeat1, Shuffle, FileAudio, Check, AlertCircle, Loader2 } from 'lucide-react';
-import { AudioItem, UserRole } from '../types';
+import { Radio, Upload, Play, Pause, SkipForward, Mic2, Clock, Youtube, Trash2, Link, Smartphone, Music, CheckSquare, Square, Lock, Sliders, Volume2, CloudUpload, Repeat, Repeat1, Shuffle, FileAudio, Check, AlertCircle, Loader2, Search, Star } from 'lucide-react';
+import { AudioItem, UserRole, UserFeedback } from '../types';
 import { isSmartPlayerUnlocked } from '../services/monetizationService';
 import { usePlatformDetection } from '../hooks/usePlatformDetection';
 import { getCorporatePlaylist, saveCorporatePlaylist } from '../services/corporateService';
@@ -9,6 +9,7 @@ import { generateSpeech } from '../services/geminiService';
 import { buscarYouTube, YouTubeSearchResult } from '../services/youtubeService';
 import { decodeAudioData, audioBufferToWav } from '../utils/audioUtils';
 import { VIGNETTE_TEXT } from '../constants';
+import { getAllFeedbacks } from '../services/analyticsService';
 
 interface Track {
   id: string;
@@ -79,6 +80,8 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [nextNarrationTimeDisplay, setNextNarrationTimeDisplay] = useState<string>('--:--');
   const [isNarratingUI, setIsNarratingUI] = useState(false);
+  const [highlightedFeedbacks, setHighlightedFeedbacks] = useState<UserFeedback[]>([]);
+  const [currentFeedbackIndex, setCurrentFeedbackIndex] = useState(0);
   
   const audioElRef = useRef<HTMLAudioElement | null>(null);
   const ytPlayerRef = useRef<any>(null);
@@ -111,7 +114,24 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       setIsPremium(p);
     };
     checkPremium();
+    loadFeedbacks();
   }, []);
+
+  const loadFeedbacks = async () => {
+    try {
+      const all = await getAllFeedbacks();
+      setHighlightedFeedbacks(all.filter(f => f.isHighlighted));
+    } catch (e) { console.warn("Failed to load feedbacks for player", e); }
+  };
+
+  useEffect(() => {
+    if (highlightedFeedbacks.length > 1) {
+      const interval = setInterval(() => {
+        setCurrentFeedbackIndex(prev => (prev + 1) % highlightedFeedbacks.length);
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [highlightedFeedbacks]);
 
   useEffect(() => {
     isSmartEqEnabledRef.current = isSmartEqEnabled;
@@ -1127,6 +1147,30 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                         {searchError && (
                             <div className="mt-2 text-[10px] text-red-400 flex items-center gap-1 bg-red-400/10 p-2 rounded-lg border border-red-400/20 animate-in fade-in slide-in-from-top-1">
                                 <AlertCircle size={10} /> {searchError}
+                            </div>
+                        )}
+
+                        {/* Testimonials Banner */}
+                        {highlightedFeedbacks.length > 0 && (
+                            <div className="mt-4 p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl animate-fade-in relative overflow-hidden">
+                                <div className="flex items-center gap-2 mb-2 relative z-10">
+                                    <Star size={12} className="text-amber-500 fill-amber-500" />
+                                    <span className="text-[9px] font-black uppercase text-indigo-400 tracking-widest">O que dizem os usuários</span>
+                                </div>
+                                <div className="relative h-12 overflow-hidden z-10">
+                                    {highlightedFeedbacks.map((f, i) => (
+                                        <div 
+                                            key={f.id} 
+                                            className={`absolute inset-0 transition-all duration-1000 flex flex-col justify-center ${i === currentFeedbackIndex ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+                                        >
+                                            <p className="text-[11px] text-slate-200 font-medium line-clamp-2 italic leading-tight">"{f.comment}"</p>
+                                            <p className="text-[9px] text-indigo-300 font-bold mt-1">— {f.userName}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="absolute -right-4 -bottom-4 opacity-10">
+                                    <Star size={64} className="text-indigo-500" />
+                                </div>
                             </div>
                         )}
 

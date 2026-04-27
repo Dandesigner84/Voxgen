@@ -4,6 +4,8 @@ import { Mic, Music, Radio, Crown, Check, BookOpen, ShieldCheck, Volume2, Mic2, 
 import { AppMode } from '../types';
 import { getUserStatus, redeemCode, getFormatExpiryDate } from '../services/monetizationService';
 import BluetoothConnect from './BluetoothConnect';
+import FeedbackModal from './FeedbackModal';
+import { auth } from '../services/firebase';
 
 interface HomeProps {
   onSelectMode: (mode: AppMode) => void;
@@ -15,6 +17,7 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail }) => {
   const [code, setCode] = useState('');
   const [status, setStatus] = useState<any>(null);
   const [redeemMsg, setRedeemMsg] = useState<{type: 'success'|'error', text: string} | null>(null);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
 
   const isCorpTeam = userRole === 'corporate-user';
   const isAdmin = userRole === 'admin';
@@ -48,9 +51,17 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail }) => {
       
       <div className="w-full max-w-4xl flex flex-col md:flex-row justify-between items-center mb-12 gap-6">
         <div className="text-center md:text-left">
-            <h1 className="text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-400 tracking-tight">
-            VoxGen AI
-            </h1>
+            <div className="flex flex-col md:flex-row md:items-end gap-3 mb-2">
+                <h1 className="text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-400 tracking-tight">
+                VoxGen AI
+                </h1>
+                <button 
+                  onClick={() => setIsFeedbackOpen(true)}
+                  className="flex items-center justify-center gap-2 text-amber-400 bg-amber-400/10 border border-amber-400/20 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-amber-400 hover:text-black transition-all mb-2 md:mb-1 self-center md:self-auto"
+                >
+                  <Star size={12} fill="currentColor" /> Avaliar VoxGen
+                </button>
+            </div>
             <p className="text-slate-400 text-lg mt-2 font-medium">
             Sua oficina de som completa com Inteligência Artificial.
             </p>
@@ -289,6 +300,14 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail }) => {
           )}
         </button>
       </div>
+
+      <FeedbackModal 
+        isOpen={isFeedbackOpen} 
+        onClose={() => setIsFeedbackOpen(false)} 
+        userId={auth.currentUser?.uid || ''}
+        userName={status?.name || userEmail.split('@')[0]}
+        userEmail={userEmail}
+      />
     </div>
   );
 };

@@ -158,3 +158,24 @@ export interface UserSession {
   companyName?: string;
   isProfileComplete?: boolean;
 }
+
+export interface AnalyticsSession {
+  id: string;
+  userId: string;
+  loginAt: number;
+  logoutAt?: number;
+  duration?: number;
+  toolsUsed: { [toolName: string]: number }; // name to seconds
+  date: string; // YYYY-MM-DD
+}
+
+export interface UserFeedback {
+  id?: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  rating: number; // 1-5
+  comment: string;
+  isHighlighted: boolean;
+  createdAt: number;
+}

@@ -87,6 +87,38 @@
         "tone": { "type": "string" }
       },
       "required": ["userId", "text", "voice", "audioBase64", "createdAt"]
+    },
+    "UserSession": {
+       "title": "UserSession",
+       "description": "Tracks user session duration and tool usage",
+       "type": "object",
+       "properties": {
+         "userId": { "type": "string" },
+         "loginAt": { "type": "number" },
+         "logoutAt": { "type": "number" },
+         "duration": { "type": "number" },
+         "toolsUsed": { 
+           "type": "object",
+           "description": "Map of tool IDs to duration spent in seconds"
+         },
+         "date": { "type": "string" }
+       },
+       "required": ["userId", "loginAt", "date"]
+    },
+    "UserFeedback": {
+       "title": "UserFeedback",
+       "description": "User ratings and highlighted evaluations",
+       "type": "object",
+       "properties": {
+          "userId": { "type": "string" },
+          "userName": { "type": "string" },
+          "userEmail": { "type": "string" },
+          "rating": { "type": "number" },
+          "comment": { "type": "string" },
+          "isHighlighted": { "type": "boolean" },
+          "createdAt": { "type": "number" }
+       },
+       "required": ["userId", "rating", "createdAt"]
     }
   },
   "firestore": {
@@ -109,6 +141,14 @@
     "/narrations/{narrationId}": {
       "schema": "SavedNarration",
       "description": "History of generated narrations"
+    },
+    "/sessions/{sessionId}": {
+       "schema": "UserSession",
+       "description": "User engagement metrics"
+    },
+    "/feedbacks/{feedbackId}": {
+       "schema": "UserFeedback",
+       "description": "User reviews and highlights"
     }
   }
 }

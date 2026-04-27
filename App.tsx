@@ -27,15 +27,25 @@ import { saveNarration, getUserNarrations } from './services/narrationService';
 import { auth, db } from './services/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { startSession, updateSessionToolUsage, endSession } from './services/analyticsService';
 
 const AppContent: React.FC = () => {
   const [user, setUser] = useState<UserSession | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [mode, setMode] = useState<AppMode>(AppMode.Home);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const lastModeChangeTimeRef = useRef<number>(Date.now());
+  const activeModeRef = useRef<AppMode>(AppMode.Home);
   
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        // Start tracking session if not already started
+        if (!sessionId) {
+            const sid = await startSession(firebaseUser.uid);
+            setSessionId(sid);
+        }
+
         // Define initial basic user info from Auth
         const initialRole: UserRole = (firebaseUser.email === 'limadan389@gmail.com') ? 'admin' : 'user';
         setUser({
@@ -154,9 +164,41 @@ const AppContent: React.FC = () => {
   };
 
   const handleLogout = async () => {
+    if (sessionId) {
+        await endSession(sessionId);
+        setSessionId(null);
+    }
     await signOut(auth);
     setMode(AppMode.Home);
   };
+
+  // Track tool usage duration
+  useEffect(() => {
+    if (!sessionId) return;
+
+    const previousMode = activeModeRef.current;
+    const now = Date.now();
+    const durationSeconds = Math.floor((now - lastModeChangeTimeRef.current) / 1000);
+
+    if (durationSeconds > 1) {
+        updateSessionToolUsage(sessionId, previousMode, durationSeconds);
+    }
+
+    lastModeChangeTimeRef.current = now;
+    activeModeRef.current = mode;
+  }, [mode, sessionId]);
+
+  // Handle window close
+  useEffect(() => {
+      const handleUnload = () => {
+          if (sessionId) {
+            // We can't await here reliably, but we can try a beacon or fire-and-forget
+            // endSession(sessionId);
+          }
+      };
+      window.addEventListener('beforeunload', handleUnload);
+      return () => window.removeEventListener('beforeunload', handleUnload);
+  }, [sessionId]);
 
   const handleInstallClick = () => {
     if (deferredPrompt) {
