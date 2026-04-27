@@ -5,6 +5,13 @@ export enum VoiceName {
   Charon = 'Charon',
   Fenrir = 'Fenrir',
   Zephyr = 'Zephyr',
+  // OpenAI Voices
+  Alloy = 'Alloy-OI',
+  Echo = 'Echo-OI',
+  Fable = 'Fable-OI',
+  Onyx = 'Onyx-OI',
+  Nova = 'Nova-OI',
+  Shimmer = 'Shimmer-OI',
 }
 
 export enum ToneType {
@@ -16,7 +23,10 @@ export enum ToneType {
   Romantic = 'Romantic',
   Suspense = 'Suspense',
   Sales = 'Sales (Black Friday)',
-  Preaching = 'Preaching'
+  Preaching = 'Preaching',
+  Storytelling = 'Storytelling',
+  Meditation = 'Meditation',
+  Advertising = 'Advertising',
 }
 
 export enum AppMode {

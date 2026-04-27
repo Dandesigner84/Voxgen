@@ -12,6 +12,14 @@ export const VOICE_OPTIONS = [
   { value: 'Fenrir-Promo', label: 'Fenrir (Locutor de Ofertas)', gender: 'Masculino', style: 'Promo' },
   { value: 'Puck-News', label: 'Puck (Jornalista / News)', gender: 'Masculino', style: 'News' },
   { value: 'Zephyr-Story', label: 'Zephyr (Contadora de Histórias)', gender: 'Feminino', style: 'Story' },
+  
+  // OpenAI Voices (Premium)
+  { value: VoiceName.Alloy, label: 'Alloy (OA - Neutra)', gender: 'Feminino' },
+  { value: VoiceName.Echo, label: 'Echo (OA - Narrativo)', gender: 'Masculino' },
+  { value: VoiceName.Fable, label: 'Fable (OA - Expressivo)', gender: 'Masculino' },
+  { value: VoiceName.Onyx, label: 'Onyx (OA - Robusto)', gender: 'Masculino' },
+  { value: VoiceName.Nova, label: 'Nova (OA - Enérgico)', gender: 'Feminino' },
+  { value: VoiceName.Shimmer, label: 'Shimmer (OA - Profissional)', gender: 'Feminino' },
 ];
 
 export const TONE_OPTIONS = [
@@ -23,6 +31,9 @@ export const TONE_OPTIONS = [
   { value: ToneType.Soothing, label: 'Calmo & Suave' },
   { value: ToneType.Dramatic, label: 'Dramático & Narrativo' },
   { value: ToneType.Preaching, label: 'Pregação (Cristã)' },
+  { value: ToneType.Storytelling, label: 'Storytelling & Contação' },
+  { value: ToneType.Meditation, label: 'Meditação & Relaxamento' },
+  { value: ToneType.Advertising, label: 'Varejo & Comercial' },
 ];
 
 export const SFX_PRESETS = [

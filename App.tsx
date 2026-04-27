@@ -34,11 +34,12 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // Define initial basic user info from Auth to avoid blocking the UI
+        // Define initial basic user info from Auth
         const initialRole: UserRole = (firebaseUser.email === 'limadan389@gmail.com') ? 'admin' : 'user';
         setUser({
             email: firebaseUser.email || '',
             role: initialRole,
+            isProfileComplete: undefined // Undefined until doc check
         });
 
         try {
@@ -54,17 +55,24 @@ const AppContent: React.FC = () => {
             } else {
                 // Create user doc if missing
                 const role: UserRole = (firebaseUser.email === 'limadan389@gmail.com') ? 'admin' : 'user';
-                await setDoc(doc(db, 'users', firebaseUser.uid), {
-                    email: firebaseUser.email,
+                const newUser = {
+                    email: firebaseUser.email || '',
+                    phoneNumber: firebaseUser.phoneNumber || '',
                     role: role,
                     plan: 'free',
                     narrationsToday: 0,
-                    createdAt: Date.now()
-                }, { merge: true });
+                    createdAt: Date.now(),
+                    isProfileComplete: false
+                };
+                await setDoc(doc(db, 'users', firebaseUser.uid), newUser, { merge: true });
+                setUser({
+                    email: firebaseUser.email || '',
+                    role: role,
+                    isProfileComplete: false
+                });
             }
         } catch (e) {
-            console.error("Auth sync warning (Firestore may be restricted):", e);
-            // We keep the initial user state so the UI at least loads
+            console.error("Auth sync warning:", e);
         }
       } else {
         setUser(null);
@@ -107,11 +115,11 @@ const AppContent: React.FC = () => {
   }, []);
 
   const handleLogin = (role: UserRole, email: string) => {
-     // User is already set via onAuthStateChanged
+     // The setUser is already handled via onAuthStateChanged with full data
      if (role === 'admin' || email === 'limadan389@gmail.com') {
          setMode(AppMode.Admin);
      } else {
-         setMode(AppMode.Home);
+         setMode(AppMode.Generator); // Direct to generator if logged in via Login.tsx
      }
   };
 

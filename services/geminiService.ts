@@ -53,16 +53,18 @@ export const refineText = async (text: string, tone: ToneType | string, useBackg
 
   if (tone === 'Vignette') {
       specificInstruction += " ESTILO VINHETA DE RÁDIO: Use linguagem impactante, curta e direta. INSERIR EFEITOS SONOROS. ";
-  } else if (tone === ToneType.Sales) {
-      specificInstruction += " ESTILO VENDAS: Urgente. Sugira uso de (caixa) ou (buzina). ";
-  } else if (tone === ToneType.Dramatic) {
-      specificInstruction += " ESTILO DRAMÁTICO: Use pausas e emoção. ";
+  } else if (tone === ToneType.Sales || tone === ToneType.Advertising) {
+      specificInstruction += " ESTILO VENDAS: Urgente, persuasivo e impactante. Sugira uso de (caixa) ou (buzina). ";
+  } else if (tone === ToneType.Dramatic || tone === ToneType.Storytelling) {
+      specificInstruction += " ESTILO DRAMÁTICO/STORYTELLING: Use pausas narrativas, emoção e ritmo de contador de histórias. ";
   } else if (tone === ToneType.Professional) {
       specificInstruction += " ESTILO PROFISSIONAL: Linguagem corporativa, clara e polida. ";
   } else if (tone === ToneType.Romantic) {
       specificInstruction += " ESTILO ROMÂNTICO: Voz suave, pausada e com carga emocional carinhosa. ";
   } else if (tone === ToneType.Suspense) {
       specificInstruction += " ESTILO SUSPENSE: Voz misteriosa, sussurrada em alguns momentos e com ritmo tenso. ";
+  } else if (tone === ToneType.Meditation || tone === ToneType.Soothing) {
+      specificInstruction += " ESTILO MEDITAÇÃO: Ritmo muito lento, tons de voz tranquilos e pausas longas entre frases. ";
   }
 
   const prompt = `
@@ -119,6 +121,46 @@ export const addAutomaticSFX = async (text: string): Promise<string> => {
 
 const callTTS = async (textChunk: string, voiceName: string, isCustom: boolean): Promise<string> => {
     if (!textChunk.trim()) return "";
+    
+    // Support for OpenAI Voices
+    if (voiceName.endsWith('-OI')) {
+        const apiKey = process.env.OPENAI_API_KEY;
+        if (!apiKey || apiKey === "undefined") {
+            throw new Error("API Key do OpenAI não configurada. Fale com o administrador.");
+        }
+        
+        const cleanVoice = voiceName.split('-')[0].toLowerCase();
+        try {
+            const response = await fetch("https://api.openai.com/v1/audio/speech", {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${apiKey}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    model: "tts-1-hd",
+                    voice: cleanVoice,
+                    input: textChunk
+                })
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(`OpenAI: ${err.error?.message || response.statusText}`);
+            }
+
+            const arrayBuffer = await response.arrayBuffer();
+            const bytes = new Uint8Array(arrayBuffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return window.btoa(binary);
+        } catch (e: any) {
+            throw new Error(`Erro OpenAI: ${e.message}`);
+        }
+    }
+
     const ai = getClient();
     const MAX_RETRIES = 5;
     let effectiveVoice = voiceName.split('-')[0];

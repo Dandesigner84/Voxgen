@@ -78,6 +78,8 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
   const audioElRef = useRef<HTMLAudioElement | null>(null);
   const ytPlayerRef = useRef<any>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const isNarratingRef = useRef(false);
   const nextNarrationTimeRef = useRef<number>(0);
   const hasFadedOutRef = useRef<boolean>(false);
@@ -149,10 +151,16 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
     const source = ctx.createMediaElementSource(audio);
     const gain = ctx.createGain();
+    const analyser = ctx.createAnalyser();
+    
+    analyser.fftSize = 256;
     gain.gain.value = 1.2; 
     source.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(analyser);
+    analyser.connect(ctx.destination);
+    
     gainNodeRef.current = gain;
+    analyserRef.current = analyser;
 
     // Inicialização segura da API do YouTube
     (window as any).onYouTubeIframeAPIReady = () => {
@@ -209,6 +217,52 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
     };
     loadVignette();
   }, []); 
+
+  useEffect(() => {
+    if (!canvasRef.current || !analyserRef.current) return;
+    
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    const analyser = analyserRef.current;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    
+    let animationId: number;
+    
+    const draw = () => {
+        animationId = requestAnimationFrame(draw);
+        analyser.getByteFrequencyData(dataArray);
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        const barWidth = (canvas.width / bufferLength) * 2.5;
+        let x = 0;
+        
+        for (let i = 0; i < bufferLength; i++) {
+            const barHeight = (dataArray[i] / 255) * canvas.height;
+            
+            // Create gradient based on mood/state
+            const gradient = ctx.createLinearGradient(0, canvas.height, 0, 0);
+            if (isNarratingRef.current) {
+                gradient.addColorStop(0, '#0891b2'); // cyan-600
+                gradient.addColorStop(1, '#67e8f9'); // cyan-300
+            } else {
+                gradient.addColorStop(0, '#4f46e5'); // indigo-600
+                gradient.addColorStop(1, '#818cf8'); // indigo-400
+            }
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+            
+            x += barWidth + 1;
+        }
+    };
+    
+    draw();
+    return () => cancelAnimationFrame(animationId);
+  }, [isPlaying]);
 
   const syncCorporatePlaylist = async (companyId: string) => {
       const corpTracks = await getCorporatePlaylist(companyId);
@@ -376,7 +430,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
               if (audioElRef.current.src !== track.src) audioElRef.current.src = track.src;
               if (gainNodeRef.current) {
                   // Respeita se houver uma narração em curso
-                  gainNodeRef.current.gain.value = isNarratingRef.current ? 0.04 : 1.2;
+                  gainNodeRef.current.gain.value = isNarratingRef.current ? 0.1 : 1.2;
               }
               
               audioElRef.current.onerror = () => {
@@ -409,7 +463,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                        if (state !== 1) player.playVideo();
                    }
                    if (player.setVolume) {
-                       player.setVolume(isNarratingRef.current ? 4 : 100);
+                       player.setVolume(isNarratingRef.current ? 10 : 100);
                    }
                    if (player.unMute) player.unMute();
                } catch(e) {
@@ -644,8 +698,8 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       source.buffer = buffer;
       const voiceGain = ctx.createGain();
       
-      // Aumentar narração para destaque máximo
-      voiceGain.gain.value = isSmartEqEnabledRef.current ? 1.8 : 1.0; 
+      // Aumentar narração para destaque máximo (120% solicitado)
+      voiceGain.gain.value = isSmartEqEnabledRef.current ? 1.2 : 1.0; 
 
       if (isSmartEqEnabledRef.current) {
           // Efeito Stereo Widening (Haas Effect)
@@ -664,6 +718,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       }
 
       voiceGain.connect(ctx.destination);
+      if (analyserRef.current) voiceGain.connect(analyserRef.current);
       narrationSourceNodeRef.current = source;
       
       source.onended = () => {
@@ -690,16 +745,16 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
   const lowerVolume = (duration: number = 3.0) => {
       if (!isSmartEqEnabledRef.current) return;
       const ctx = initAudioContext();
-      console.log(`[SmartPlayer] Ducking: baixando playlist para 4% em ${duration}s`);
+      console.log(`[SmartPlayer] Ducking: baixando playlist para 10% em ${duration}s`);
       
       if (gainNodeRef.current) {
           gainNodeRef.current.gain.cancelScheduledValues(ctx.currentTime);
           gainNodeRef.current.gain.setValueAtTime(gainNodeRef.current.gain.value, ctx.currentTime);
-          gainNodeRef.current.gain.linearRampToValueAtTime(0.04, ctx.currentTime + duration);
+          gainNodeRef.current.gain.linearRampToValueAtTime(0.12, ctx.currentTime + duration);
       }
       if (ytPlayerRef.current && typeof ytPlayerRef.current.getVolume === 'function') {
           const currentVol = ytPlayerRef.current.getVolume();
-          fadeYouTubeVolume(currentVol, 4, duration * 1000);
+          fadeYouTubeVolume(currentVol, 10, duration * 1000);
       }
   };
 
@@ -1017,12 +1072,8 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                     <div className="flex items-center justify-between mb-2"><label className="text-xs font-bold text-slate-400 flex items-center gap-2"><Sliders size={14} /> Equalizador & Fader</label>
                         <button onClick={() => setIsSmartEqEnabled(!isSmartEqEnabled)} className={`text-[10px] px-2 py-1 rounded-full font-bold ${isSmartEqEnabled ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400'}`}>{isSmartEqEnabled ? 'ON' : 'OFF'}</button>
                     </div>
-                    <div className="bg-slate-950 rounded-lg p-3 space-y-3">
-                        <div className="flex items-center gap-3"><Music size={12} className="text-slate-500" />
-                            <div className="flex-grow h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                <div className={`h-full transition-all duration-[3000ms] ${isNarratingUI && isSmartEqEnabled ? 'w-[15%] bg-yellow-600' : 'w-[100%] bg-green-500'}`} />
-                            </div>
-                        </div>
+                    <div className="bg-slate-950 rounded-xl p-4 overflow-hidden h-24 flex items-end">
+                        <canvas ref={canvasRef} width={400} height={100} className="w-full h-full" />
                     </div>
                 </div>
             </div>
