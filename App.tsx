@@ -43,25 +43,36 @@ const AppContent: React.FC = () => {
             isProfileComplete: undefined // Undefined until doc check
         });
 
+        // Restore mode based on role on first load
+        setMode((prev) => {
+            if (prev === AppMode.Home) {
+                return (initialRole === 'admin' || firebaseUser.email === 'limadan389@gmail.com') ? AppMode.Admin : AppMode.Narration;
+            }
+            return prev;
+        });
+
         try {
             const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
             if (userDoc.exists()) {
                 const data = userDoc.data();
+                const actualRole = data.role as UserRole;
                 setUser({
                     email: firebaseUser.email || '',
-                    role: data.role as UserRole,
+                    role: actualRole,
                     companyName: data.companyName,
                     isProfileComplete: data.isProfileComplete === true // Force false if it's anything else
                 });
+
+                // Update mode if it was decided based on initialRole and it changed
+                if (actualRole === 'admin' || firebaseUser.email === 'limadan389@gmail.com') {
+                    setMode(AppMode.Admin);
+                }
 
                 // Load History
                 if (audioContextRef.current) {
                   const savedHistory = await getUserNarrations(firebaseUser.uid, audioContextRef.current);
                   setHistory(savedHistory);
                 } else {
-                   // If audioContext not yet init, it will be loaded when needed or manually
-                   // Actually, for history we need a context to decode. 
-                   // We'll init it just for decoding if needed.
                    const tempCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
                    const savedHistory = await getUserNarrations(firebaseUser.uid, tempCtx);
                    setHistory(savedHistory);
@@ -91,6 +102,7 @@ const AppContent: React.FC = () => {
         }
       } else {
         setUser(null);
+        setMode(AppMode.Home);
       }
       setAuthLoading(false);
     });
@@ -134,7 +146,7 @@ const AppContent: React.FC = () => {
      if (role === 'admin' || email === 'limadan389@gmail.com') {
          setMode(AppMode.Admin);
      } else {
-         setMode(AppMode.Generator); // Direct to generator if logged in via Login.tsx
+         setMode(AppMode.Narration); // Direct to generator if logged in via Login.tsx
      }
   };
 
