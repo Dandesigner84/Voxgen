@@ -120,7 +120,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       setResendTimer(60);
     } catch (err: any) {
       console.error('[Phone Auth Error]', err);
-      setError('Erro ao enviar código: ' + (err.message || 'Tente novamente.'));
+      let msg = err.message || 'Tente novamente.';
+      if (err.code === 'auth/operation-not-allowed') {
+        msg = 'O login por telefone não está ativado ou esta região (Brasil) está bloqueada no Console do Firebase (Authentication -> Settings -> SMS Region Policy).';
+      }
+      setError('Erro ao enviar código: ' + msg);
     } finally {
       setLoading(false);
     }
