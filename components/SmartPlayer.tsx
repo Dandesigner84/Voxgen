@@ -5,7 +5,8 @@ import { AudioItem, UserRole } from '../types';
 import { isSmartPlayerUnlocked } from '../services/monetizationService';
 import { usePlatformDetection } from '../hooks/usePlatformDetection';
 import { getCorporatePlaylist, saveCorporatePlaylist } from '../services/corporateService';
-import { generateSpeech, searchYouTube } from '../services/geminiService';
+import { generateSpeech } from '../services/geminiService';
+import { buscarYouTube, YouTubeSearchResult } from '../services/youtubeService';
 import { decodeAudioData, audioBufferToWav } from '../utils/audioUtils';
 import { VIGNETTE_TEXT } from '../constants';
 
@@ -72,8 +73,9 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
   const [pendingUploads, setPendingUploads] = useState<PendingFile[]>([]);
   const [isProcessingUploads, setIsProcessingUploads] = useState(false);
   const [selectedNarrationIds, setSelectedNarrationIds] = useState<string[]>([]);
-  const [searchResults, setSearchResults] = useState<{id: string, name: string}[]>([]);
+  const [searchResults, setSearchResults] = useState<YouTubeSearchResult[]>([]);
   const [isSearchingYT, setIsSearchingYT] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [nextNarrationTimeDisplay, setNextNarrationTimeDisplay] = useState<string>('--:--');
   const [isNarratingUI, setIsNarratingUI] = useState(false);
@@ -845,27 +847,57 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       if (!searchQuery.trim()) return;
       setIsSearchingYT(true);
       setSearchResults([]);
+      setSearchError(null);
       try {
-          const results = await searchYouTube(searchQuery);
+          const results = await buscarYouTube(searchQuery);
           setSearchResults(results);
-          if (results.length === 0) alert("Nenhum resultado encontrado.");
-      } catch (e) {
-          alert("Erro ao pesquisar no YouTube.");
+          if (results.length === 0) setSearchError("Nenhum resultado encontrado.");
+      } catch (e: any) {
+          console.error("Erro ao buscar no YouTube:", e);
+          if (e.message === 'INVALID_API_KEY') setSearchError("Chave de API do YouTube inválida.");
+          else if (e.message === 'LIMIT_EXCEEDED') setSearchError("Limite de buscas excedido. Tente amanhã.");
+          else if (e.message === 'API_KEY_MISSING') setSearchError("Configure a VITE_YOUTUBE_API_KEY.");
+          else setSearchError("Erro ao pesquisar no YouTube. Verifique sua conexão.");
       } finally {
           setIsSearchingYT(false);
       }
   };
 
-  const addYTSearchTrack = (id: string, name: string) => {
-      setPlaylist(prev => [...prev, { 
+  const addYTSearchTrack = (video: YouTubeSearchResult) => {
+      const newTrack: Track = { 
           id: crypto.randomUUID(), 
           type: 'youtube', 
-          name: name, 
-          src: id, 
-          thumbnail: `https://img.youtube.com/vi/${id}/0.jpg` 
-      }]);
+          name: video.title, 
+          src: video.videoId, 
+          thumbnail: video.thumbnail 
+      };
+      setPlaylist(prev => [...prev, newTrack]);
       setSearchResults([]);
       setSearchQuery('');
+  };
+
+  const playNowYT = (video: YouTubeSearchResult) => {
+    const newTrack: Track = { 
+        id: crypto.randomUUID(), 
+        type: 'youtube', 
+        name: video.title, 
+        src: video.videoId, 
+        thumbnail: video.thumbnail 
+    };
+    
+    setPlaylist(prev => {
+        const newPlaylist = [...prev];
+        newPlaylist.splice(currentTrackIndex + 1, 0, newTrack);
+        return newPlaylist;
+    });
+    
+    setSearchResults([]);
+    setSearchQuery('');
+    
+    // Avançar para a nova trilha
+    setTimeout(() => {
+        handleSkipForward();
+    }, 100);
   };
 
   const getSpotifySrc = () => {
@@ -1086,35 +1118,56 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                                 onClick={handleSearchYT} 
                                 disabled={isSearchingYT}
                                 className="bg-red-600 hover:bg-red-500 text-white px-4 rounded-lg flex items-center justify-center disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
-                                title="Pesquisar IA"
+                                title="Pesquisar YouTube"
                             >
                                 {isSearchingYT ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
                             </button>
                         </div>
 
+                        {searchError && (
+                            <div className="mt-2 text-[10px] text-red-400 flex items-center gap-1 bg-red-400/10 p-2 rounded-lg border border-red-400/20 animate-in fade-in slide-in-from-top-1">
+                                <AlertCircle size={10} /> {searchError}
+                            </div>
+                        )}
+
                         {searchResults.length > 0 && (
-                            <div className="absolute top-full left-0 right-0 z-30 mt-2 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden max-h-64 overflow-y-auto animate-in slide-in-from-top-2 duration-200">
+                            <div className="absolute top-full left-0 right-0 z-30 mt-2 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden max-h-80 overflow-y-auto animate-in slide-in-from-top-2 duration-200">
                                 <div className="p-2 bg-slate-800/50 border-b border-slate-700 font-bold text-[10px] text-slate-400 uppercase tracking-wider flex justify-between items-center">
-                                    Resultados da IA
+                                    Resultados do YouTube
                                     <button onClick={() => setSearchResults([])} className="text-slate-500 hover:text-white">Limpar</button>
                                 </div>
                                 {searchResults.map(result => (
-                                    <button 
-                                        key={result.id}
-                                        onClick={() => addYTSearchTrack(result.id, result.name)}
-                                        className="w-full flex items-start gap-3 p-3 hover:bg-slate-800 text-left transition-colors border-b border-slate-800 last:border-0 group"
+                                    <div 
+                                        key={result.videoId}
+                                        className="w-full flex items-center gap-3 p-3 hover:bg-slate-800 transition-colors border-b border-slate-800 last:border-0 group"
                                     >
-                                        <div className="relative shrink-0">
-                                            <img src={`https://img.youtube.com/vi/${result.id}/default.jpg`} className="w-16 h-10 rounded object-cover shadow-sm" alt="" />
-                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded">
+                                        <div className="relative shrink-0 w-16 h-10 shadow-sm rounded overflow-hidden">
+                                            <img src={result.thumbnail} className="w-full h-full object-cover" alt="" />
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                                                 <Music size={12} className="text-white" />
                                             </div>
                                         </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-xs text-white font-medium line-clamp-2 leading-tight group-hover:text-cyan-400 transition-colors">{result.name}</p>
-                                            <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-tighter">YouTube Video</p>
+                                        <div className="flex-1 min-w-0 pr-4">
+                                            <p className="text-xs text-white font-medium line-clamp-1 leading-tight group-hover:text-red-400 transition-colors" title={result.title}>{result.title}</p>
+                                            <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-1">{result.channelTitle}</p>
                                         </div>
-                                    </button>
+                                        <div className="flex gap-1">
+                                            <button 
+                                                onClick={() => playNowYT(result)}
+                                                className="p-1.5 bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white rounded transition-all"
+                                                title="Reproduzir Agora"
+                                            >
+                                                <Play size={12} fill="currentColor" />
+                                            </button>
+                                            <button 
+                                                onClick={() => addYTSearchTrack(result)}
+                                                className="p-1.5 bg-slate-700 text-slate-300 hover:bg-indigo-600 hover:text-white rounded transition-all"
+                                                title="Adicionar à Fila"
+                                            >
+                                                <Link size={12} />
+                                            </button>
+                                        </div>
+                                    </div>
                                 ))}
                             </div>
                         )}
