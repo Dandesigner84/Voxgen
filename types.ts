@@ -122,6 +122,19 @@ export type ComicStyle = 'Manga' | 'American Comic' | 'Pixar 3D' | 'Anime' | 'Sk
 
 export type UserRole = 'user' | 'admin' | 'corporate-admin' | 'corporate-user';
 
+export interface UserProfile {
+  uid: string;
+  email: string;
+  name?: string;
+  phoneNumber?: string;
+  role: UserRole;
+  plan: 'free' | 'premium';
+  narrationsToday: number;
+  createdAt: number;
+  expiryDate?: number | null;
+  companyName?: string;
+}
+
 export interface UserSession {
   role: UserRole;
   email: string;

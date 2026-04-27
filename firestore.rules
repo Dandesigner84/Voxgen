@@ -74,6 +74,7 @@ service cloud.firestore {
           incoming().diff(existing()).affectedKeys().hasAny(['name', 'narrationsToday', 'lastUsageDate', 'role', 'email', 'plan', 'expiryDate', 'createdAt'])
         )
       );
+      allow delete: if isAdmin();
     }
 
     match /premiumCodes/{codeId} {
