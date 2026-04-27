@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Mail, ArrowRight, ShieldCheck, User, CheckCircle, ArrowLeft, Loader2, Key, AlertCircle } from 'lucide-react';
+import { Mail, ArrowRight, ShieldCheck, User, CheckCircle, ArrowLeft, Loader2, Key, AlertCircle, UserPlus } from 'lucide-react';
 import { UserRole } from '../types';
 import { auth, db, handleFirestoreError, OperationType } from '../services/firebase';
 import { 
@@ -55,7 +55,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       }
     } catch (err: any) {
       console.error('[Firebase Auth Error]', err);
-      setError('Erro ao iniciar login com Google: ' + (err.message || 'Erro desconhecido'));
+      let msg = err.message || 'Erro desconhecido';
+      if (err.code === 'auth/unauthorized-domain') {
+        msg = 'Este domínio não está autorizado no Firebase. Adicione "voxgen-teal.vercel.app" nos Domínios Autorizados do Console Firebase.';
+      } else if (err.code === 'auth/operation-not-allowed') {
+        msg = 'O login com Google não está ativado no seu projeto Firebase.';
+      }
+      setError('Erro ao iniciar login com Google: ' + msg);
     } finally {
       setLoading(false);
     }

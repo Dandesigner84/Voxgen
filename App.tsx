@@ -33,19 +33,25 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        // Define initial basic user info from Auth to avoid blocking the UI
+        const initialRole: UserRole = (firebaseUser.email === 'limadan389@gmail.com') ? 'admin' : 'user';
+        setUser({
+            email: firebaseUser.email || '',
+            role: initialRole,
+        });
+
         try {
             const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
             if (userDoc.exists()) {
+                const data = userDoc.data();
                 setUser({
                     email: firebaseUser.email || '',
-                    role: userDoc.data().role as UserRole,
-                    companyName: userDoc.data().companyName
+                    role: data.role as UserRole,
+                    companyName: data.companyName
                 });
             } else {
-                // Initial sync if doc was somehow missed
+                // Create user doc if missing
                 const role: UserRole = (firebaseUser.email === 'limadan389@gmail.com') ? 'admin' : 'user';
-                const newUser = { role, email: firebaseUser.email || '' };
-                setUser(newUser);
                 await setDoc(doc(db, 'users', firebaseUser.uid), {
                     email: firebaseUser.email,
                     role: role,
@@ -55,7 +61,8 @@ const AppContent: React.FC = () => {
                 }, { merge: true });
             }
         } catch (e) {
-            console.error("Auth sync error", e);
+            console.error("Auth sync warning (Firestore may be restricted):", e);
+            // We keep the initial user state so the UI at least loads
         }
       } else {
         setUser(null);
