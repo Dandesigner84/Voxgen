@@ -6,12 +6,12 @@ export const VOICE_OPTIONS = [
   { value: VoiceName.Puck, label: 'Puck (Masculino, Equilibrado)', gender: 'Masculino' },
   { value: VoiceName.Charon, label: 'Charon (Masculino, Grave)', gender: 'Masculino' },
   { value: VoiceName.Fenrir, label: 'Fenrir (Masculino, Intenso)', gender: 'Masculino' },
-  { value: VoiceName.Zephyr, label: 'Zephyr (Feminino, Calmo)', gender: 'Feminino' },
+  { value: VoiceName.Aoede, label: 'Aoede (Feminino, Suave)', gender: 'Feminino' },
   
   { value: 'Kore-Radio', label: 'Kore (Rádio FM / Pop)', gender: 'Feminino', style: 'Radio' },
   { value: 'Fenrir-Promo', label: 'Fenrir (Locutor de Ofertas)', gender: 'Masculino', style: 'Promo' },
   { value: 'Puck-News', label: 'Puck (Jornalista / News)', gender: 'Masculino', style: 'News' },
-  { value: 'Zephyr-Story', label: 'Zephyr (Contadora de Histórias)', gender: 'Feminino', style: 'Story' },
+  { value: 'Aoede-Story', label: 'Aoede (Contadora de Histórias)', gender: 'Feminino', style: 'Story' },
   
   // OpenAI Voices (Premium)
   { value: VoiceName.Alloy, label: 'Alloy (OA - Neutra)', gender: 'Feminino' },

@@ -303,9 +303,9 @@ const AppContent: React.FC = () => {
             console.log(`[VoxGen CTA] Triggering vignette for narration #${currentCount}`);
             setTimeout(async () => {
                 try {
-                    const vignetteBase64 = await generateSpeech(VIGNETTE_TEXT, VoiceName.Zephyr); 
+                    const vignetteBase64 = await generateSpeech(VIGNETTE_TEXT, VoiceName.Aoede); 
                     const vBuffer = await decodeAudioData(vignetteBase64, ctx);
-                    const newItem: AudioItem = { id: `cta-${currentCount}`, text: "[VINHETA CTA] " + VIGNETTE_TEXT, voice: VoiceName.Zephyr, audioData: vBuffer, createdAt: new Date(), duration: vBuffer.duration };
+                    const newItem: AudioItem = { id: `cta-${currentCount}`, text: "[VINHETA CTA] " + VIGNETTE_TEXT, voice: VoiceName.Aoede, audioData: vBuffer, createdAt: new Date(), duration: vBuffer.duration };
                     setHistory(prev => [newItem, ...prev]);
                     
                     const source = ctx.createBufferSource();

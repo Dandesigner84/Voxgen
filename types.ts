@@ -4,7 +4,7 @@ export enum VoiceName {
   Puck = 'Puck',
   Charon = 'Charon',
   Fenrir = 'Fenrir',
-  Zephyr = 'Zephyr',
+  Aoede = 'Aoede',
   // OpenAI Voices
   Alloy = 'Alloy-OI',
   Echo = 'Echo-OI',

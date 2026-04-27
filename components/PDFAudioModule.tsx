@@ -29,7 +29,7 @@ const PDFAudioModule: React.FC<PDFModuleProps> = () => {
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
   const [rate, setRate] = useState(1.0);
   const [volume, setVolume] = useState(1.0);
-  const [selectedVoice, setSelectedVoice] = useState<string>(VoiceName.Zephyr);
+  const [selectedVoice, setSelectedVoice] = useState<string>(VoiceName.Aoede);
   const [readingStyle, setReadingStyle] = useState<ToneType>(ToneType.Neutral);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);

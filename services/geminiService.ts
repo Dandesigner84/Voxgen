@@ -172,7 +172,7 @@ const callTTS = async (textChunk: string, voiceName: string, isCustom: boolean):
     let effectiveVoice = voiceName.split('-')[0];
     
     // Safety mapping for Gemini Prebuilt Voices
-    const validGeminiVoices = ['Puck', 'Charon', 'Kore', 'Fenrir', 'Zephyr'];
+    const validGeminiVoices = ['Puck', 'Charon', 'Kore', 'Fenrir', 'Aoede'];
     if (!validGeminiVoices.includes(effectiveVoice) && !voiceName.includes('-')) {
         // Fallback to Kore if voice is unknown
     }
@@ -188,7 +188,7 @@ const callTTS = async (textChunk: string, voiceName: string, isCustom: boolean):
                 const mimeType = getMimeTypeFromBase64(customVoiceData.audioSampleBase64);
                 const base64Sample = customVoiceData.audioSampleBase64.split(',')[1] || customVoiceData.audioSampleBase64;
                 const response = await ai.models.generateContent({
-                    model: "gemini-3.1-flash-live-preview",
+                    model: "gemini-1.5-flash",
                     contents: {
                         parts: [
                             { inlineData: { mimeType: mimeType, data: base64Sample } },
@@ -204,7 +204,7 @@ const callTTS = async (textChunk: string, voiceName: string, isCustom: boolean):
             const finalVoice = validGeminiVoices.includes(effectiveVoice) ? effectiveVoice : 'Kore';
             
             const response = await ai.models.generateContent({
-                model: "gemini-3.1-flash-tts-preview",
+                model: "gemini-1.5-flash",
                 contents: [{ parts: [{ text: textChunk }] }],
                 config: {
                     responseModalities: [Modality.AUDIO],
