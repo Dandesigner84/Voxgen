@@ -49,6 +49,23 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail }) => {
   return (
     <div className="flex flex-col items-center justify-center min-h-[80vh] w-full animate-fade-in px-4 py-8">
       
+      {/* Banner de Atualização */}
+      <div className="w-full max-w-4xl mb-8 bg-gradient-to-r from-indigo-600/20 to-cyan-600/20 border border-indigo-500/30 rounded-2xl p-4 flex items-center justify-between backdrop-blur-sm shadow-xl shadow-indigo-500/5 animate-in slide-in-from-top-4 duration-500">
+          <div className="flex items-center gap-3">
+              <div className="bg-gradient-to-br from-indigo-500 to-cyan-500 p-2.5 rounded-xl shadow-lg ring-1 ring-white/20">
+                  <Sparkles size={20} className="text-white" />
+              </div>
+              <div>
+                  <h4 className="text-white font-bold text-sm tracking-tight">VoxGen v2.5: Narração Liberada! 🚀</h4>
+                  <p className="text-indigo-200/80 text-[11px] leading-tight max-w-sm">Agora todos os usuários podem criar suas narrações (1 por semana no teste). Experimente agora!</p>
+              </div>
+          </div>
+          <div className="hidden md:flex flex-col items-end">
+              <span className="bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20 text-[9px] font-black text-indigo-300 uppercase tracking-widest">Nova Atualização</span>
+              <span className="text-[10px] text-emerald-400 mt-1 font-bold">✨ Módulo Disponível</span>
+          </div>
+      </div>
+      
       <div className="w-full max-w-4xl flex flex-col md:flex-row justify-between items-center mb-12 gap-6">
         <div className="text-center md:text-left">
             <div className="flex flex-col md:flex-row md:items-end gap-3 mb-2">
@@ -121,7 +138,7 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail }) => {
                 </div>
             ) : (
                 <div className="text-xs text-slate-400 mb-2">
-                    Uso hoje: <span className="text-white font-bold">{status.narrationsToday}/3</span> narrações
+                    Uso esta semana: <span className="text-white font-bold">{status.narrationsThisWeek || 0}/1</span> narrações
                 </div>
             )}
 
@@ -143,24 +160,15 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail }) => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl w-full">
         <button 
-          onClick={() => (isAdmin || userRole === 'corporate-admin') ? onSelectMode(AppMode.Narration) : alert("Módulo em construção para usuários VIP.")} 
-          className={`group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${(userRole === 'user' || userRole === 'corporate-user') && !isAdmin ? 'cursor-not-allowed opacity-80' : 'hover:border-indigo-500/50'}`}
+          onClick={() => onSelectMode(AppMode.Narration)} 
+          className="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 hover:border-indigo-500/50 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl"
         >
           <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          {(userRole === 'user' || userRole === 'corporate-user') && !isAdmin && (
-            <div className="absolute top-4 right-4 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-bold z-10">
-              EM CONSTRUÇÃO
-            </div>
-          )}
           <div className="w-16 h-16 bg-indigo-500/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
             <Mic size={32} className="text-indigo-400" />
           </div>
           <h2 className="text-xl font-bold text-white mb-2">Narração</h2>
-          {(isAdmin || userRole === 'corporate-admin') ? (
-            <p className="text-slate-400 text-xs">Transforme textos em voz humana com alta fidelidade.</p>
-          ) : (
-            <p className="text-amber-500/70 text-xs font-medium italic">Módulo em construção. Disponível em breve para usuários comuns.</p>
-          )}
+          <p className="text-slate-400 text-xs">Transforme textos em voz humana com alta fidelidade.</p>
         </button>
 
         {!isCorpTeam && (

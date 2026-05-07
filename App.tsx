@@ -71,7 +71,8 @@ const AppContent: React.FC = () => {
                     email: firebaseUser.email || '',
                     role: actualRole,
                     companyName: data.companyName,
-                    isProfileComplete: data.isProfileComplete === true // Force false if it's anything else
+                    isProfileComplete: data.isProfileComplete === true,
+                    isPromoUser: data.isPromoUser || false
                 });
 
                 // Update mode if it was decided based on initialRole and it changed
@@ -341,8 +342,11 @@ const AppContent: React.FC = () => {
             currentCount = await incrementUsage(); 
         }
 
-        // Trigger CTA Vignette every 5th narration
-        if (currentCount > 0 && currentCount % 5 === 0) {
+        // Trigger CTA Vignette every 3rd narration for non-premium or promo users
+        const isPromo = user?.isPromoUser;
+        const needsCTAVignette = (user?.role !== 'admin' && !isSuperAdmin && user?.role !== 'corporate-admin') || isPromo;
+        
+        if (needsCTAVignette && currentCount > 0 && currentCount % 3 === 0) {
             console.log(`[VoxGen CTA] Triggering vignette for narration #${currentCount}`);
             setTimeout(async () => {
                 try {
