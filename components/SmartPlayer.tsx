@@ -1291,6 +1291,29 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                 </div>
             </div>
         </div>
+        <div className="flex justify-center mt-12 gap-4">
+            <button 
+                onClick={() => {
+                   const comment = prompt("O que você está achando do VoxGen? Deixe sua avaliação:");
+                   if (comment) {
+                       const rating = parseInt(prompt("De 1 a 5, qual sua nota?") || "5");
+                       import('../services/analyticsService').then(service => {
+                           service.submitFeedback({
+                               userId: userEmail || 'guest',
+                               userName: userEmail?.split('@')[0] || 'Usuário',
+                               userEmail: userEmail || 'anonimo@voxgen.ai',
+                               rating: Math.min(5, Math.max(1, rating)),
+                               comment
+                           });
+                           alert("Obrigado pelo seu feedback! Sua avaliação foi enviada para moderação.");
+                       });
+                   }
+                }}
+                className="px-6 py-3 bg-slate-900 border border-slate-800 rounded-2xl text-slate-400 text-xs font-black uppercase tracking-widest hover:text-white hover:border-indigo-500 transition-all flex items-center gap-2 group"
+            >
+                <Star size={16} className="group-hover:text-amber-500 group-hover:fill-amber-500 transition-colors" /> Avaliar VoxGen
+            </button>
+        </div>
     </div>
   );
 };

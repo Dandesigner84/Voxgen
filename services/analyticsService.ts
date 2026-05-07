@@ -1,5 +1,5 @@
 
-import { db } from './firebase';
+import { db, handleFirestoreError, OperationType } from './firebase';
 import { 
   collection, 
   addDoc, 
@@ -30,8 +30,13 @@ export const startSession = async (userId: string): Promise<string> => {
     duration: 0
   };
   
-  const docRef = await addDoc(collection(db, SESSIONS_COLLECTION), sessionData);
-  return docRef.id;
+  try {
+    const docRef = await addDoc(collection(db, SESSIONS_COLLECTION), sessionData);
+    return docRef.id;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, SESSIONS_COLLECTION);
+    return "";
+  }
 };
 
 export const updateSessionToolUsage = async (
@@ -41,8 +46,6 @@ export const updateSessionToolUsage = async (
 ) => {
   try {
     const sessionRef = doc(db, SESSIONS_COLLECTION, sessionId);
-    // Note: We'd normally use increment here but for nested objects we'll do a read-modify-write 
-    // or just store as flat keys if possible. For simplicity here, flat update.
     const sessionDoc = await getDocs(query(collection(db, SESSIONS_COLLECTION), where("__name__", "==", sessionId)));
     if (!sessionDoc.empty) {
         const data = sessionDoc.docs[0].data();
@@ -56,15 +59,19 @@ export const updateSessionToolUsage = async (
         });
     }
   } catch (e) {
-    console.warn("Analytics update failed", e);
+    handleFirestoreError(e, OperationType.UPDATE, `${SESSIONS_COLLECTION}/${sessionId}`);
   }
 };
 
 export const endSession = async (sessionId: string) => {
-  const sessionRef = doc(db, SESSIONS_COLLECTION, sessionId);
-  await updateDoc(sessionRef, {
-    logoutAt: Date.now()
-  });
+  try {
+    const sessionRef = doc(db, SESSIONS_COLLECTION, sessionId);
+    await updateDoc(sessionRef, {
+      logoutAt: Date.now()
+    });
+  } catch (e) {
+    handleFirestoreError(e, OperationType.UPDATE, `${SESSIONS_COLLECTION}/${sessionId}`);
+  }
 };
 
 export const submitFeedback = async (feedback: Omit<UserFeedback, 'id' | 'isHighlighted' | 'createdAt'>) => {
@@ -73,30 +80,52 @@ export const submitFeedback = async (feedback: Omit<UserFeedback, 'id' | 'isHigh
     isHighlighted: false,
     createdAt: Date.now()
   };
-  return await addDoc(collection(db, FEEDBACKS_COLLECTION), feedbackData);
+  try {
+    return await addDoc(collection(db, FEEDBACKS_COLLECTION), feedbackData);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, FEEDBACKS_COLLECTION);
+  }
 };
 
 export const getAllFeedbacks = async (): Promise<UserFeedback[]> => {
-  const q = query(collection(db, FEEDBACKS_COLLECTION), orderBy('createdAt', 'desc'));
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserFeedback));
+  try {
+    const q = query(collection(db, FEEDBACKS_COLLECTION), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserFeedback));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, FEEDBACKS_COLLECTION);
+    return [];
+  }
 };
 
 export const toggleFeedbackHighlight = async (feedbackId: string, isHighlighted: boolean) => {
-  const feedbackRef = doc(db, FEEDBACKS_COLLECTION, feedbackId);
-  await updateDoc(feedbackRef, { isHighlighted });
+  try {
+    const feedbackRef = doc(db, FEEDBACKS_COLLECTION, feedbackId);
+    await updateDoc(feedbackRef, { isHighlighted });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `${FEEDBACKS_COLLECTION}/${feedbackId}`);
+  }
 };
 
 export const getSessionsMetrics = async (days: number = 7): Promise<AnalyticsSession[]> => {
-  const q = query(
-    collection(db, SESSIONS_COLLECTION), 
-    orderBy('loginAt', 'desc'),
-    limit(500) // Practical limit
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AnalyticsSession));
+  try {
+    const q = query(
+      collection(db, SESSIONS_COLLECTION), 
+      orderBy('loginAt', 'desc'),
+      limit(500) // Practical limit
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AnalyticsSession));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, SESSIONS_COLLECTION);
+    return [];
+  }
 };
 
 export const deleteFeedback = async (id: string) => {
-  await deleteDoc(doc(db, FEEDBACKS_COLLECTION, id));
+  try {
+    await deleteDoc(doc(db, FEEDBACKS_COLLECTION, id));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `${FEEDBACKS_COLLECTION}/${id}`);
+  }
 };

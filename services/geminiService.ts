@@ -12,7 +12,7 @@ const getClient = () => {
   const rawKey = process.env.GEMINI_API_KEY || "";
   
   if (!rawKey || rawKey === "undefined" || rawKey === "null") {
-      console.error("[Gemini] API Key is missing or invalid. Verify your environment variables.");
+      console.warn("[Gemini] API Key is missing or invalid. Verify your environment variables.");
   }
   
   const cleanKey = rawKey.replace(/["'\s]/g, ""); 
@@ -91,11 +91,11 @@ export const refineText = async (text: string, tone: ToneType | string, useBackg
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
     });
     
-    let cleanedText = response.text?.trim() || text;
+    let cleanedText = response.text || text;
     cleanedText = cleanedText.replace(/^["']|["']$/g, "").trim();
     return cleanedText;
   } catch (e) {
@@ -116,10 +116,10 @@ export const addAutomaticSFX = async (text: string): Promise<string> => {
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
     });
-    return response.text?.trim() || text;
+    return response.text || text;
   } catch (e) {
     return text;
   }
@@ -187,15 +187,19 @@ const callTTS = async (textChunk: string, voiceName: string, isCustom: boolean):
             if (customVoiceData && customVoiceData.audioSampleBase64) {
                 const mimeType = getMimeTypeFromBase64(customVoiceData.audioSampleBase64);
                 const base64Sample = customVoiceData.audioSampleBase64.split(',')[1] || customVoiceData.audioSampleBase64;
+                
+                // For custom voice "cloning", we use the multimodal capability of Gemini 3.1 Flash TTS
                 const response = await ai.models.generateContent({
-                    model: "gemini-1.5-flash",
+                    model: "gemini-3.1-flash-tts-preview",
                     contents: {
                         parts: [
                             { inlineData: { mimeType: mimeType, data: base64Sample } },
-                            { text: `Leia exatamente em Português Brasil: "${textChunk}"` }
+                            { text: `Siga o timbre e estilo deste áudio. Leia exatamente este texto com emoção e clareza em Português Brasil: "${textChunk}"` }
                         ]
                     },
-                    config: { responseModalities: [Modality.AUDIO] }
+                    config: { 
+                        responseModalities: [Modality.AUDIO]
+                    }
                 });
                 return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
             } 
@@ -204,7 +208,7 @@ const callTTS = async (textChunk: string, voiceName: string, isCustom: boolean):
             const finalVoice = validGeminiVoices.includes(effectiveVoice) ? effectiveVoice : 'Kore';
             
             const response = await ai.models.generateContent({
-                model: "gemini-1.5-flash",
+                model: "gemini-3.1-flash-tts-preview",
                 contents: [{ parts: [{ text: textChunk }] }],
                 config: {
                     responseModalities: [Modality.AUDIO],
@@ -228,40 +232,68 @@ const callTTS = async (textChunk: string, voiceName: string, isCustom: boolean):
 };
 
 export const generateSpeech = async (rawText: string, voice: string): Promise<string> => {
-  const sfxRegex = /(\(.*?\))/g;
-  const parts = rawText.split(sfxRegex);
-  if (parts.length === 1) return await callTTS(rawText, voice, false);
-  const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-  const audioBuffers: AudioBuffer[] = [];
+  try {
+    const sfxRegex = /(\(.*?\))/g;
+    const parts = rawText.split(sfxRegex);
+    
+    if (parts.length === 1) return await callTTS(rawText, voice, false);
+    
+    // Create ctx with specific sample rate for TTS (24kHz is standard for Gemini)
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+    const audioBuffers: AudioBuffer[] = [];
 
-  for (const part of parts) {
-      const segment = part.trim();
-      if (!segment) continue;
-      
-      // Delay to avoid hitting rate limits on rapid sequential calls
-      await wait(300);
+    try {
+        for (const part of parts) {
+            const segment = part.trim();
+            if (!segment) continue;
+            
+            // Minimal delay to prevent burst limit
+            await wait(200);
 
-      if (segment.startsWith('(') && segment.endsWith(')')) {
-          const keyword = segment.slice(1, -1);
-          try {
-             const sfxBuffer = await generateProceduralSFX(keyword, ctx);
-             audioBuffers.push(sfxBuffer);
-          } catch (e) {}
-      } else {
-          const ttsBase64 = await callTTS(segment, voice, false);
-          if (ttsBase64) {
-              const ttsBuffer = await decodeAudioData(ttsBase64, ctx);
-              audioBuffers.push(ttsBuffer);
-          }
-      }
+            if (segment.startsWith('(') && segment.endsWith(')')) {
+                const keyword = segment.slice(1, -1);
+                try {
+                    const sfxBuffer = await generateProceduralSFX(keyword, ctx);
+                    audioBuffers.push(sfxBuffer);
+                } catch (e) {
+                    console.warn(`[Gemini Service] SFX fail: ${keyword}`, e);
+                }
+            } else {
+                const ttsBase64 = await callTTS(segment, voice, false);
+                if (ttsBase64) {
+                    const ttsBuffer = await decodeAudioData(ttsBase64, ctx);
+                    audioBuffers.push(ttsBuffer);
+                }
+            }
+        }
+
+        if (audioBuffers.length === 0) throw new Error("Nenhum áudio gerado.");
+
+        const finalBuffer = concatenateAudioBuffers(audioBuffers, ctx);
+        const wavBlob = (await import("../utils/audioUtils")).audioBufferToWav(finalBuffer);
+        
+        const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const result = (reader.result as string).split(',')[1];
+                resolve(result);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(wavBlob);
+        });
+
+        // Clean up context to avoid browser limits
+        await ctx.close();
+        return base64;
+
+    } catch (innerError) {
+        if (ctx.state !== 'closed') await ctx.close();
+        throw innerError;
+    }
+  } catch (e: any) {
+    console.error("[Gemini Service] Critical Speech Gen Error:", e);
+    throw new Error(e.message || "Falha ao gerar narração. Verifique sua conexão e limites.");
   }
-  const finalBuffer = concatenateAudioBuffers(audioBuffers, ctx);
-  const wavBlob = (await import("../utils/audioUtils")).audioBufferToWav(finalBuffer);
-  return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-      reader.readAsDataURL(wavBlob);
-  });
 };
 
 export const analyzeVoiceQuality = async (audioBase64: string, expectedText: string): Promise<any> => { return { clarityScore: 85, feedback: "Boa dicção." }; };
@@ -285,7 +317,7 @@ export const generateSongMetadata = async (description: string, lyrics?: string)
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -332,10 +364,10 @@ export const summarizeText = async (text: string): Promise<string> => {
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
     });
-    return response.text?.trim() || text;
+    return response.text || text;
   } catch (e) {
     console.error("Erro ao resumir:", e);
     return text;
