@@ -98,7 +98,13 @@ export const refineText = async (text: string, tone: ToneType | string, useBackg
     let cleanedText = response.text || text;
     cleanedText = cleanedText.replace(/^["']|["']$/g, "").trim();
     return cleanedText;
-  } catch (e) {
+  } catch (e: any) {
+    const errorMsg = typeof e.message === 'string' ? e.message : JSON.stringify(e);
+    if (errorMsg.includes("RESOURCE_EXHAUSTED") || errorMsg.includes("429")) {
+        console.warn("[Gemini Refine] Quota exceeded. Returning original text.");
+    } else {
+        console.error("[Gemini Refine] Error:", errorMsg);
+    }
     return text; 
   }
 };
@@ -120,7 +126,11 @@ export const addAutomaticSFX = async (text: string): Promise<string> => {
       contents: prompt,
     });
     return response.text || text;
-  } catch (e) {
+  } catch (e: any) {
+    const errorMsg = typeof e.message === 'string' ? e.message : JSON.stringify(e);
+    if (errorMsg.includes("RESOURCE_EXHAUSTED") || errorMsg.includes("429")) {
+        console.warn("[Gemini SFX] Quota exceeded. Returning original text.");
+    }
     return text;
   }
 };
@@ -131,40 +141,42 @@ const callTTS = async (textChunk: string, voiceName: string, isCustom: boolean):
     // Support for OpenAI Voices
     if (voiceName.endsWith('-OI')) {
         const apiKey = process.env.OPENAI_API_KEY;
-        if (!apiKey || apiKey === "undefined") {
-            throw new Error("API Key do OpenAI não configurada. Fale com o administrador.");
-        }
-        
-        const cleanVoice = voiceName.split('-')[0].toLowerCase();
-        try {
-            const response = await fetch("https://api.openai.com/v1/audio/speech", {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${apiKey}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    model: "tts-1-hd",
-                    voice: cleanVoice,
-                    input: textChunk
-                })
-            });
+        if (apiKey && apiKey !== "undefined" && apiKey !== "null") {
+            const cleanVoice = voiceName.split('-')[0].toLowerCase();
+            try {
+                const response = await fetch("https://api.openai.com/v1/audio/speech", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${apiKey.replace(/["'\s]/g, "")}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        model: "tts-1-hd",
+                        voice: cleanVoice,
+                        input: textChunk
+                    })
+                });
 
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(`OpenAI: ${err.error?.message || response.statusText}`);
+                if (response.ok) {
+                    const arrayBuffer = await response.arrayBuffer();
+                    const bytes = new Uint8Array(arrayBuffer);
+                    let binary = '';
+                    for (let i = 0; i < bytes.byteLength; i++) {
+                        binary += String.fromCharCode(bytes[i]);
+                    }
+                    return window.btoa(binary);
+                } else {
+                    const err = await response.json();
+                    console.error(`[OpenAI TTS] Error: ${err.error?.message || response.statusText}. Falling back to Gemini...`);
+                }
+            } catch (e: any) {
+                console.error(`[OpenAI TTS] Critical Error: ${e.message}. Falling back to Gemini...`);
             }
-
-            const arrayBuffer = await response.arrayBuffer();
-            const bytes = new Uint8Array(arrayBuffer);
-            let binary = '';
-            for (let i = 0; i < bytes.byteLength; i++) {
-                binary += String.fromCharCode(bytes[i]);
-            }
-            return window.btoa(binary);
-        } catch (e: any) {
-            throw new Error(`Erro OpenAI: ${e.message}`);
+        } else {
+            console.warn("[OpenAI TTS] API Key missing. Falling back to Gemini...");
         }
+        // Fallback: If we reach here, OpenAI failed or key is missing. 
+        // We strip the -OI and try to find a Gemini equivalent or use default.
     }
 
     const ai = getClient();
@@ -219,13 +231,20 @@ const callTTS = async (textChunk: string, voiceName: string, isCustom: boolean):
             });
             return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
         } catch (e: any) {
-            const isQuotaError = e.message?.includes("RESOURCE_EXHAUSTED") || e.message?.includes("429");
+            const errorMsg = typeof e.message === 'string' ? e.message : JSON.stringify(e);
+            const isQuotaError = errorMsg.includes("RESOURCE_EXHAUSTED") || errorMsg.includes("429");
             const backoffTime = isQuotaError ? Math.pow(2, attempt) * 2000 : Math.pow(2, attempt) * 1000;
             
-            console.warn(`[Gemini TTS] Attempt ${attempt} failed: ${e.message}. Retrying in ${backoffTime}ms...`);
-            await wait(backoffTime);
+            console.warn(`[Gemini TTS] Attempt ${attempt} failed: ${errorMsg}. Retrying in ${backoffTime}ms...`);
             
-            if (attempt === MAX_RETRIES) throw new Error(`Gemini API Quota/Error: ${e.message || "Unknown error"}`);
+            if (attempt === MAX_RETRIES) {
+                if (isQuotaError) {
+                    throw new Error("Limite de cota do Google Gemini atingido para esta conta gratuita. Por favor, aguarde alguns minutos ou tente novamente amanhã. Usuários Premium possuem limites maiores.");
+                }
+                throw new Error(`Erro na API Gemini: ${errorMsg}`);
+            }
+
+            await wait(backoffTime);
         }
     }
     throw new Error("Falha ao chamar API Gemini após múltiplas tentativas.");
@@ -368,8 +387,13 @@ export const summarizeText = async (text: string): Promise<string> => {
       contents: prompt,
     });
     return response.text || text;
-  } catch (e) {
-    console.error("Erro ao resumir:", e);
+  } catch (e: any) {
+    const errorMsg = typeof e.message === 'string' ? e.message : JSON.stringify(e);
+    if (errorMsg.includes("RESOURCE_EXHAUSTED") || errorMsg.includes("429")) {
+        console.warn("[Gemini Summary] Quota exceeded. Returning original text.");
+    } else {
+        console.error("Erro ao resumir:", errorMsg);
+    }
     return text;
   }
 };
