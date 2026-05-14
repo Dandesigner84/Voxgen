@@ -10,7 +10,7 @@
     "start": "node dist/server.cjs"
   },
   "dependencies": {
-    "@google/genai": "^1.30.0",
+    "@google/genai": "^1.52.0",
     "@supabase/supabase-js": "^2.104.0",
     "cors": "^2.8.6",
     "esbuild": "^0.28.0",
