@@ -72,46 +72,30 @@ const VoiceControls: React.FC<VoiceControlsProps> = ({
   useEffect(() => {
     const fetchVoices = async () => {
       const standard = VOICE_OPTIONS.map(v => ({...v, type: 'standard'}));
-      setAvailableVoices(standard); // Start with standard voices immediately
-
-      try {
-        const approvedList = await getApprovedVoices();
-        const approved = approvedList.map(v => ({ value: v.id, label: `${v.name} (Comunidade)`, gender: 'Oficial', type: 'official' }));
-        
-        let privateVoices: any[] = [];
-        if (userEmail) {
-          const userVoices = await getVoicesByUser(userEmail);
-          privateVoices = userVoices
-            .filter(v => v.category === 'private' || v.category === 'official_approved')
-            .map(v => ({ 
-              value: v.id, 
-              label: `${v.name} (Minha Voz)`, 
-              gender: 'Privada', 
-              type: 'private' 
-            }));
-        }
-
-        const uniqueVoices = [...standard];
-        
-        // Add approved community voices
-        approved.forEach(av => {
-          if (!uniqueVoices.find(uv => uv.value === av.value)) {
-            uniqueVoices.push(av);
-          }
-        });
-
-        // Add private voices
-        privateVoices.forEach(pv => { 
-          if (!uniqueVoices.find(uv => uv.value === pv.value)) {
-            uniqueVoices.push(pv); 
-          }
-        });
-        
-        setAvailableVoices(uniqueVoices);
-      } catch (e) {
-        console.error("Failed to load custom voices, falling back to standard:", e);
-        // We already set standard voices at the start of fetchVoices
+      const approvedList = await getApprovedVoices();
+      const approved = approvedList.map(v => ({ value: v.id, label: `${v.name} (Comunidade)`, gender: 'Oficial', type: 'official' }));
+      
+      let privateVoices: any[] = [];
+      if (userEmail) {
+        const userVoices = await getVoicesByUser(userEmail);
+        privateVoices = userVoices
+          .filter(v => v.category === 'private' || v.category === 'official_approved')
+          .map(v => ({ 
+            value: v.id, 
+            label: `${v.name} (Minha Voz)`, 
+            gender: 'Privada', 
+            type: 'private' 
+          }));
       }
+
+      const uniqueVoices = [...standard, ...approved];
+      privateVoices.forEach(pv => { 
+        if (!uniqueVoices.find(uv => uv.value === pv.value)) {
+          uniqueVoices.push(pv); 
+        }
+      });
+      
+      setAvailableVoices(uniqueVoices);
     };
     
     fetchVoices();

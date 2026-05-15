@@ -16,12 +16,7 @@ const COLLECTION = 'customVoices';
 
 export const getCustomVoices = async (): Promise<CustomVoice[]> => {
   try {
-    // Only fetch official approved voices by default if no user is specified
-    // to avoid listing private voices of other users which triggers permission errors
-    const q = query(
-      collection(db, COLLECTION), 
-      where("category", "==", "official_approved")
-    );
+    const q = query(collection(db, COLLECTION));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CustomVoice));
   } catch (error) {
@@ -53,20 +48,8 @@ export const getApprovedVoices = async (): Promise<CustomVoice[]> => {
 };
 
 export const getAllOfficialVoices = async (): Promise<CustomVoice[]> => {
-  try {
-    // Querying both approved and candidates might be needed for admin, 
-    // but for general users we should only get approved.
-    const q = query(
-      collection(db, COLLECTION), 
-      where("category", "in", ["official_approved", "official_candidate"])
-    );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CustomVoice));
-  } catch (error) {
-    console.warn("Error fetching official voices:", error);
-    // Fallback to just approved if "in" query fails or has no access
-    return getApprovedVoices();
-  }
+  const voices = await getCustomVoices();
+  return voices.filter(v => v.category.startsWith('official'));
 };
 
 export const saveCustomVoice = async (voice: CustomVoice): Promise<void> => {

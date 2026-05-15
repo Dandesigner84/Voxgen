@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Radio, Upload, Play, Pause, SkipForward, Mic2, Clock, Youtube, Trash2, Link, Smartphone, Music, CheckSquare, Square, Lock, Sliders, Volume2, CloudUpload, Repeat, Repeat1, Shuffle, FileAudio, Check, AlertCircle, Loader2, Search, Star } from 'lucide-react';
 import { AudioItem, UserRole, UserFeedback } from '../types';
-import { isSmartPlayerUnlocked, getUserStatus } from '../services/monetizationService';
+import { isSmartPlayerUnlocked } from '../services/monetizationService';
 import { usePlatformDetection } from '../hooks/usePlatformDetection';
 import { getCorporatePlaylist, saveCorporatePlaylist } from '../services/corporateService';
 import { generateSpeech } from '../services/geminiService';
@@ -102,7 +102,6 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
   const { isIOS } = usePlatformDetection();
   const [isPremium, setIsPremium] = useState(false);
-  const [isPromoUser, setIsPromoUser] = useState(false);
   const isSmartEqEnabledRef = useRef(isSmartEqEnabled);
   const isCorpAdmin = userRole === 'corporate-admin';
   const isCorpUser = userRole === 'corporate-user';
@@ -111,9 +110,8 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
   useEffect(() => {
     const checkPremium = async () => {
-      const status = await getUserStatus();
-      setIsPremium(status.plan === 'premium');
-      setIsPromoUser(status.isPromoUser || false);
+      const p = await isSmartPlayerUnlocked();
+      setIsPremium(p);
     };
     checkPremium();
     loadFeedbacks();
@@ -705,10 +703,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
   const playNarration = () => {
       const ctx = initAudioContext(); 
       let buffer: AudioBuffer | null = null;
-      
-      const needsVignette = (!isPremium || isPromoUser) && narrationsSinceVignetteRef.current >= 3;
-
-      if (needsVignette && vignetteBufferRef.current) {
+      if (!isPremium && narrationsSinceVignetteRef.current >= 4 && vignetteBufferRef.current) {
           buffer = vignetteBufferRef.current;
           narrationsSinceVignetteRef.current = 0;
       } else {
@@ -736,7 +731,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                   const uploadItem = uploadedNarrations.find(u => u.id === randomId);
                   if (uploadItem) buffer = uploadItem.buffer;
               }
-              if (buffer && (!isPremium || isPromoUser)) narrationsSinceVignetteRef.current += 1;
+              if (buffer && !isPremium) narrationsSinceVignetteRef.current += 1;
           }
       }
       if (!buffer) {
@@ -1011,23 +1006,6 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
     <div className="max-w-6xl mx-auto w-full px-4 animate-fade-in pb-20 relative">
         <div id="youtube-player-hidden" className="fixed top-[-9999px] left-[-9999px] opacity-0 pointer-events-none"></div>
         <input ref={fileInputRef} type="file" accept="audio/*,.mpeg,.mpg" multiple className="hidden" onChange={handleFileSelect} />
-        
-        {/* Banner de Atualização */}
-        <div className="mb-6 bg-gradient-to-r from-indigo-600/20 to-cyan-600/20 border border-indigo-500/30 rounded-2xl p-4 flex items-center justify-between backdrop-blur-sm shadow-xl shadow-indigo-500/5">
-            <div className="flex items-center gap-3">
-                <div className="bg-gradient-to-br from-indigo-500 to-cyan-500 p-2.5 rounded-xl shadow-lg ring-1 ring-white/20">
-                    <Radio size={20} className="text-white" />
-                </div>
-                <div>
-                    <h4 className="text-white font-bold text-sm tracking-tight">VoxGen v2.5: Período de Teste! 🚀</h4>
-                    <p className="text-indigo-200/80 text-[11px] leading-tight max-w-sm">Criação de narrações liberada para todos os usuários (1 por semana). Aproveite para testar a nova atualização!</p>
-                </div>
-            </div>
-            <div className="hidden md:flex flex-col items-end">
-                <span className="bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20 text-[9px] font-black text-indigo-300 uppercase tracking-widest">Update Release</span>
-                <span className="text-[10px] text-slate-500 mt-1 font-medium">✨ Unlimited for Premium</span>
-            </div>
-        </div>
         
         {pendingUploads.length > 0 && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in">
@@ -1312,29 +1290,6 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                     </div>
                 </div>
             </div>
-        </div>
-        <div className="flex justify-center mt-12 gap-4">
-            <button 
-                onClick={() => {
-                   const comment = prompt("O que você está achando do VoxGen? Deixe sua avaliação:");
-                   if (comment) {
-                       const rating = parseInt(prompt("De 1 a 5, qual sua nota?") || "5");
-                       import('../services/analyticsService').then(service => {
-                           service.submitFeedback({
-                               userId: userEmail || 'guest',
-                               userName: userEmail?.split('@')[0] || 'Usuário',
-                               userEmail: userEmail || 'anonimo@voxgen.ai',
-                               rating: Math.min(5, Math.max(1, rating)),
-                               comment
-                           });
-                           alert("Obrigado pelo seu feedback! Sua avaliação foi enviada para moderação.");
-                       });
-                   }
-                }}
-                className="px-6 py-3 bg-slate-900 border border-slate-800 rounded-2xl text-slate-400 text-xs font-black uppercase tracking-widest hover:text-white hover:border-indigo-500 transition-all flex items-center gap-2 group"
-            >
-                <Star size={16} className="group-hover:text-amber-500 group-hover:fill-amber-500 transition-colors" /> Avaliar VoxGen
-            </button>
         </div>
     </div>
   );

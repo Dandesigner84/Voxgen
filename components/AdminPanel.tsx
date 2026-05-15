@@ -77,7 +77,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ userRole = 'admin', userEmail }
   const [statusFilter, setStatusFilter] = useState<'all' | 'free' | 'premium'>('all');
   
   // Platform Data
-  const [stats, setStats] = useState({ totalUsers: 0, premiumUsers: 0, totalNarrationsToday: 0, avgSessionTime: 0, activeUsersToday: 0 });
+  const [stats, setStats] = useState({ totalUsers: 0, premiumUsers: 0, totalNarrationsToday: 0 });
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [codes, setCodes] = useState<PremiumCode[]>([]);
   const [voices, setVoices] = useState<CustomVoice[]>([]);
@@ -97,21 +97,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ userRole = 'admin', userEmail }
     try {
       if (activeTab === 'dashboard') {
         const platformStats = await getPlatformStats();
-        const platformSessions = await getSessionsMetrics();
-        
-        // Calculate extra dashboard stats
-        const today = new Date().toISOString().split('T')[0];
-        const todaySessions = platformSessions.filter(s => s.date === today);
-        const activeUsersCount = new Set(todaySessions.map(s => s.userId)).size;
-        
-        const totalDuration = platformSessions.reduce((acc, s) => acc + (s.duration || 0), 0);
-        const avgSession = totalDuration / (platformSessions.length || 1);
-        
-        setStats({
-          ...platformStats,
-          avgSessionTime: Math.round(avgSession / 60), // in minutes
-          activeUsersToday: activeUsersCount
-        });
+        setStats(platformStats);
       } else if (activeTab === 'users') {
         const allUsers = await listAllUsers();
         setUsers(allUsers);
@@ -259,78 +245,53 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ userRole = 'admin', userEmail }
           
           {/* Header Stats */}
           {activeTab === 'dashboard' && (
-            <div className="animate-fade-in space-y-6 mb-10">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl group hover:border-indigo-500/50 transition-all shadow-xl shadow-indigo-950/20">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="p-3 bg-blue-500/10 rounded-2xl text-blue-400">
-                      <Users size={24} />
-                    </div>
-                    <span className="text-[10px] font-bold text-green-400 flex items-center gap-1 bg-green-400/10 px-2 py-0.5 rounded-full">
-                      <TrendingUp size={10} /> +12%
-                    </span>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 animate-fade-in">
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl group hover:border-indigo-500/50 transition-all">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-3 bg-blue-500/10 rounded-2xl text-blue-400">
+                    <Users size={24} />
                   </div>
-                  <h3 className="text-slate-400 text-sm font-medium mb-1">Total de Usuários</h3>
-                  <p className="text-3xl font-black text-white">{stats.totalUsers}</p>
-                  <p className="text-[10px] text-slate-500 mt-2 font-bold uppercase tracking-widest">Base de dados global</p>
+                  <span className="text-[10px] font-bold text-green-400 flex items-center gap-1 bg-green-400/10 px-2 py-0.5 rounded-full">
+                    <TrendingUp size={10} /> +12%
+                  </span>
                 </div>
-
-                <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl group hover:border-amber-500/50 transition-all shadow-xl shadow-amber-950/20">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="p-3 bg-amber-500/10 rounded-2xl text-amber-400">
-                      <Crown size={24} />
-                    </div>
-                    <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div>
-                  </div>
-                  <h3 className="text-slate-400 text-sm font-medium mb-1">Assinantes Premium</h3>
-                  <p className="text-3xl font-black text-white">{stats.premiumUsers}</p>
-                  <p className="text-[10px] text-slate-500 mt-2 font-bold uppercase tracking-widest">Taxa: {((stats.premiumUsers / (stats.totalUsers || 1)) * 100).toFixed(1)}%</p>
-                </div>
-
-                <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl group hover:border-emerald-500/50 transition-all shadow-xl shadow-emerald-950/20">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="p-3 bg-emerald-500/10 rounded-2xl text-emerald-400">
-                      <Clock size={24} />
-                    </div>
-                  </div>
-                  <h3 className="text-slate-400 text-sm font-medium mb-1">Tempo Médio/Sessão</h3>
-                  <p className="text-3xl font-black text-white">{stats.avgSessionTime} <span className="text-sm font-normal text-slate-500">min</span></p>
-                  <p className="text-[10px] text-slate-500 mt-2 font-bold uppercase tracking-widest">Retenção de usuários</p>
-                </div>
-
-                <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl group hover:border-cyan-500/50 transition-all shadow-xl shadow-cyan-950/20">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="p-3 bg-cyan-500/10 rounded-2xl text-cyan-400">
-                      <Activity size={24} />
-                    </div>
-                    <span className="text-[10px] font-bold text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded-full">LIVE</span>
-                  </div>
-                  <h3 className="text-slate-400 text-sm font-medium mb-1">Ativos Hoje</h3>
-                  <p className="text-3xl font-black text-white">{stats.activeUsersToday}</p>
-                  <p className="text-[10px] text-slate-500 mt-2 font-bold uppercase tracking-widest">Usuários únicos / 24h</p>
+                <h3 className="text-slate-400 text-sm font-medium mb-1">Total de Usuários</h3>
+                <p className="text-3xl font-black text-white">{stats.totalUsers}</p>
+                <div className="mt-4 pt-4 border-t border-slate-800 flex items-center justify-between">
+                  <span className="text-xs text-slate-500">Métrica Global</span>
+                  <button onClick={() => setActiveTab('users')} className="text-xs text-blue-400 font-bold flex items-center gap-1 hover:underline">Ver todos <ArrowUpRight size={12} /></button>
                 </div>
               </div>
 
-              <div className="bg-indigo-600/10 border border-indigo-500/20 p-8 rounded-[40px] flex flex-col md:flex-row items-center gap-8 relative overflow-hidden">
-                <div className="absolute -right-20 -bottom-20 opacity-10">
-                   <Activity size={300} className="text-indigo-500" />
-                </div>
-                <div className="flex-1 relative z-10 text-center md:text-left">
-                  <h2 className="text-3xl font-black text-white mb-2 tracking-tighter">VoxGen Performance</h2>
-                  <p className="text-slate-400 max-w-md">Sua plataforma está operando com alta eficiência. Hoje já foram geradas <span className="text-indigo-400 font-bold">{stats.totalNarrationsToday} narrações</span> por AI.</p>
-                  <div className="mt-6 flex flex-wrap gap-4 justify-center md:justify-start">
-                    <button onClick={() => setActiveTab('analytics')} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-indigo-600/20">
-                      Ver Relatório Completo <BarChart3 size={18} />
-                    </button>
-                    <button onClick={() => setActiveTab('voices')} className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-3 rounded-2xl font-bold transition-all">
-                      Gerenciar Vozes
-                    </button>
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl group hover:border-amber-500/50 transition-all">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-3 bg-amber-500/10 rounded-2xl text-amber-400">
+                    <Crown size={24} />
                   </div>
+                  <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
+                    Premium Active
+                  </span>
                 </div>
-                <div className="w-full md:w-80 h-40 bg-slate-900/50 backdrop-blur-md rounded-3xl border border-slate-700 p-6 relative z-10 flex flex-col justify-center items-center">
-                    <p className="text-slate-500 text-xs font-black uppercase tracking-widest mb-2">Saúde do Sistema</p>
-                    <div className="text-4xl font-black text-emerald-400 mb-1">99.8%</div>
-                    <p className="text-[10px] text-slate-600 font-bold italic lowercase">up-time em tempo real</p>
+                <h3 className="text-slate-400 text-sm font-medium mb-1">Membros Premium</h3>
+                <p className="text-3xl font-black text-white">{stats.premiumUsers}</p>
+                <div className="mt-4 pt-4 border-t border-slate-800 flex items-center justify-between">
+                  <span className="text-xs text-slate-500">Taxa: {((stats.premiumUsers / (stats.totalUsers || 1)) * 100).toFixed(1)}%</span>
+                  <button onClick={() => setActiveTab('codes')} className="text-xs text-amber-400 font-bold flex items-center gap-1 hover:underline">Novo cupom <ArrowUpRight size={12} /></button>
+                </div>
+              </div>
+
+              <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl group hover:border-emerald-500/50 transition-all">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-3 bg-emerald-500/10 rounded-2xl text-emerald-400">
+                    <Activity size={24} />
+                  </div>
+                  <div className="animate-pulse w-2 h-2 rounded-full bg-emerald-500"></div>
+                </div>
+                <h3 className="text-slate-400 text-sm font-medium mb-1">Narralções Hoje</h3>
+                <p className="text-3xl font-black text-white">{stats.totalNarrationsToday}</p>
+                <div className="mt-4 pt-4 border-t border-slate-800 flex items-center justify-between text-xs text-slate-500">
+                  <span>Atividade Real-time</span>
+                  <span className="text-emerald-400 font-bold uppercase tracking-widest text-[9px]">Servidor OK</span>
                 </div>
               </div>
             </div>
@@ -734,82 +695,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ userRole = 'admin', userEmail }
                     </ResponsiveContainer>
                   </div>
                 </div>
-              </div>
-
-              {/* Top Users by Usage Table */}
-              <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl overflow-x-auto">
-                  <div className="p-8 border-b border-slate-800 bg-slate-800/20 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                      <div>
-                        <h3 className="text-xl font-black text-white tracking-tight">Top Usuários por Engajamento</h3>
-                        <p className="text-slate-500 text-sm">Usuários que mais tempo utilizam as ferramentas da plataforma</p>
-                      </div>
-                      <div className="p-2 bg-indigo-500/10 text-indigo-400 rounded-xl flex items-center gap-2 border border-indigo-500/20">
-                         <Star size={16} /> <span className="text-xs font-bold uppercase tracking-tighter">MVP List</span>
-                      </div>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr className="bg-slate-950/30 border-b border-slate-800">
-                           <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Rank</th>
-                           <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Usuário</th>
-                           <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Total Uso</th>
-                           <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center text-indigo-400">Smart Player</th>
-                           <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center text-cyan-400">Narração</th>
-                           <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center text-amber-400">Avatar</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {Object.entries(sessions.reduce((acc, s) => {
-                          const user = acc[s.userId] || { userId: s.userId, total: 0, tools: {} as {[k:string]: number} };
-                          user.total += (s.duration || 0);
-                          Object.entries(s.toolsUsed || {}).forEach(([t, d]) => {
-                            user.tools[t] = (user.tools[t] || 0) + d;
-                          });
-                          acc[s.userId] = user;
-                          return acc;
-                        }, {} as {[k:string]: any}))
-                        .sort((a: any, b: any) => b[1].total - a[1].total)
-                        .slice(0, 5)
-                        .map(([uid, data]: any, idx) => (
-                          <tr key={uid} className="border-b border-slate-800/30 hover:bg-slate-800/20 transition-all group">
-                             <td className="px-6 py-4">
-                                <div className={`w-6 h-6 rounded-lg flex items-center justify-center font-black text-[10px] ${idx === 0 ? 'bg-amber-500 text-black' : idx === 1 ? 'bg-slate-300 text-black' : idx === 2 ? 'bg-amber-800 text-white' : 'bg-slate-800 text-slate-500'}`}>
-                                  {idx + 1}
-                                </div>
-                             </td>
-                             <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex flex-col">
-                                  <span className="text-xs font-bold text-white mb-0.5">{users.find(u => u.uid === uid)?.name || 'Anônimo'}</span>
-                                  <span className="text-[9px] text-slate-500 font-mono italic">{uid.substring(0, 12)}...</span>
-                                </div>
-                             </td>
-                             <td className="px-6 py-4">
-                                <span className="text-xs font-black text-white">{Math.round(data.total / 60)} <span className="text-[9px] font-normal text-slate-500">m</span></span>
-                             </td>
-                             <td className="px-6 py-4 text-center">
-                                <div className="text-[10px] font-bold text-slate-400">{Math.round((data.tools?.smart_player || 0) / 60)}m</div>
-                                <div className="w-16 h-1 bg-slate-800 rounded-full mx-auto mt-1 overflow-hidden">
-                                   <div className="h-full bg-indigo-500" style={{ width: `${Math.min((data.tools?.smart_player || 0) / 3600 * 100, 100)}%` }} />
-                                </div>
-                             </td>
-                             <td className="px-6 py-4 text-center">
-                                <div className="text-[10px] font-bold text-slate-400">{Math.round((data.tools?.narration || 0) / 60)}m</div>
-                                <div className="w-16 h-1 bg-slate-800 rounded-full mx-auto mt-1 overflow-hidden">
-                                   <div className="h-full bg-cyan-500" style={{ width: `${Math.min((data.tools?.narration || 0) / 3600 * 100, 100)}%` }} />
-                                </div>
-                             </td>
-                             <td className="px-6 py-4 text-center">
-                                <div className="text-[10px] font-bold text-slate-400">{Math.round((data.tools?.avatar || 0) / 60)}m</div>
-                                <div className="w-16 h-1 bg-slate-800 rounded-full mx-auto mt-1 overflow-hidden">
-                                   <div className="h-full bg-amber-500" style={{ width: `${Math.min((data.tools?.avatar || 0) / 3600 * 100, 100)}%` }} />
-                                </div>
-                             </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
               </div>
 
                {/* Sessions List */}

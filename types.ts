@@ -100,9 +100,6 @@ export interface UserStatus {
   plan: 'free' | 'premium';
   expiryDate: number | null;
   narrationsToday: number;
-  narrationsThisWeek?: number;
-  lastNarrationAt?: number;
-  isPromoUser?: boolean;
 }
 
 export type VoiceCategory = 'private' | 'official_candidate' | 'official_approved' | 'official_rejected';
@@ -146,8 +143,6 @@ export interface UserProfile {
   role: UserRole;
   plan: 'free' | 'premium';
   narrationsToday: number;
-  narrationsThisWeek?: number;
-  lastNarrationAt?: number;
   createdAt: number;
   expiryDate?: number | null;
   companyName?: string;
@@ -155,7 +150,6 @@ export interface UserProfile {
   segment?: string;
   goal?: string;
   referral?: string;
-  isPromoUser?: boolean;
 }
 
 export interface UserSession {
@@ -163,7 +157,6 @@ export interface UserSession {
   email: string;
   companyName?: string;
   isProfileComplete?: boolean;
-  isPromoUser?: boolean;
 }
 
 export interface AnalyticsSession {

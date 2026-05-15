@@ -14,12 +14,10 @@ const ReloadPrompt: React.FC = () => {
     },
   });
 
-  const offlineReadyState = swResult?.offlineReady || [false, (_: boolean) => {}];
-  const needUpdateState = swResult?.needUpdate || [false, (_: boolean) => {}];
-  
-  const [offlineReady, setOfflineReady] = offlineReadyState;
-  const [needUpdate, setNeedUpdate] = needUpdateState;
-  const updateServiceWorker = swResult?.updateServiceWorker || ((_: boolean) => {});
+  // Safe access to swResult to prevent destructuring errors
+  const [offlineReady, setOfflineReady] = swResult?.offlineReady || [false, () => {}];
+  const [needUpdate, setNeedUpdate] = swResult?.needUpdate || [false, () => {}];
+  const updateServiceWorker = swResult?.updateServiceWorker || (() => {});
 
   const close = () => {
     setOfflineReady(false);
