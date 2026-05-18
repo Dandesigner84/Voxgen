@@ -66,7 +66,6 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
   const [loopMode, setLoopMode] = useState<'off' | 'all' | 'one'>('all');
   const [isShuffle, setIsShuffle] = useState(false);
-  const [isNarrationEnabled, setIsNarrationEnabled] = useState(true);
   const [isFirstDailyUse, setIsFirstDailyUse] = useState(false);
   const [webInput, setWebInput] = useState('');
   const [intervalSeconds, setIntervalSeconds] = useState(60); 
@@ -432,17 +431,8 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       setIsVignettePlaying(true);
       
       try {
-        let buffer: AudioBuffer;
-        
-        // Use cache for standard CTA vignette if it's already preloaded
-        if (!isIntro && vignetteBufferRef.current) {
-            buffer = vignetteBufferRef.current;
-        } else {
-            const base64 = await generateSpeech(vignetteText, 'Kore');
-            buffer = await decodeAudioData(base64, ctx);
-            // Cache it if it's the standard one
-            if (!isIntro) vignetteBufferRef.current = buffer;
-        }
+        const base64 = await generateSpeech(vignetteText, 'Kore');
+        const buffer = await decodeAudioData(base64, ctx);
         
         const source = ctx.createBufferSource();
         source.buffer = buffer;
@@ -467,7 +457,6 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
         console.error("[SmartPlayer] Erro fatal na reprodução da vinheta", e);
         setIsVignettePlaying(false);
         if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
-        startScheduler(); // Garantir que o agendador continue mesmo se a vinheta falhar
       }
   };
 
@@ -688,13 +677,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
               }
               
               if (currentTime >= nextNarrationTimeRef.current && !isNarratingRef.current) {
-                  if (isNarrationEnabled) {
-                      playNarration();
-                  } else {
-                      // Se narração desativada, apenas reseta o timer sem abaixar volume
-                      nextNarrationTimeRef.current = Date.now() + (intervalSecondsRef.current * 1000);
-                      hasFadedOutRef.current = false;
-                  }
+                  playNarration();
               }
 
               // Watchdog: Se por algum motivo o tempo passou de 10 segundos da narração e nada aconteceu
@@ -1299,28 +1282,9 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                      )}
                  </div>
                  <div className="mt-6"><div className="flex justify-between mb-2"><label className="text-xs text-slate-400">Intervalo</label><span className="text-xs font-bold text-cyan-400">{intervalSeconds}s</span></div><input type="range" min="5" max="180" step="5" value={intervalSeconds} onChange={(e) => setIntervalSeconds(parseInt(e.target.value))} className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500" /></div>
-                 <div className="mt-6 border-t border-slate-800 pt-4 space-y-4">
-                    <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-slate-400 flex items-center gap-2">
-                            <Mic2 size={14} /> Reproduzir Narrações
-                        </label>
-                        <button 
-                            onClick={() => setIsNarrationEnabled(!isNarrationEnabled)} 
-                            className={`text-[10px] px-3 py-1 rounded-full font-bold transition-all ${isNarrationEnabled ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-slate-700 text-slate-400 border border-slate-600'}`}
-                        >
-                            {isNarrationEnabled ? 'ATIVADO' : 'DESATIVADO'}
-                        </button>
-                    </div>
-                    <div className="flex items-center justify-between mb-2">
-                        <label className="text-xs font-bold text-slate-400 flex items-center gap-2">
-                            <Sliders size={14} /> Equalizador & Fader
-                        </label>
-                        <button 
-                            onClick={() => setIsSmartEqEnabled(!isSmartEqEnabled)} 
-                            className={`text-[10px] px-2 py-1 rounded-full font-bold ${isSmartEqEnabled ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400'}`}
-                        >
-                            {isSmartEqEnabled ? 'ON' : 'OFF'}
-                        </button>
+                 <div className="mt-6 border-t border-slate-800 pt-4">
+                    <div className="flex items-center justify-between mb-2"><label className="text-xs font-bold text-slate-400 flex items-center gap-2"><Sliders size={14} /> Equalizador & Fader</label>
+                        <button onClick={() => setIsSmartEqEnabled(!isSmartEqEnabled)} className={`text-[10px] px-2 py-1 rounded-full font-bold ${isSmartEqEnabled ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400'}`}>{isSmartEqEnabled ? 'ON' : 'OFF'}</button>
                     </div>
                     <div className="bg-slate-950 rounded-xl p-4 overflow-hidden h-24 flex items-end">
                         <canvas ref={canvasRef} width={400} height={100} className="w-full h-full" />
