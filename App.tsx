@@ -336,11 +336,8 @@ const AppContent: React.FC = () => {
         }
         
         // Monetization & Vignette Trigger
-        let currentCount = 0;
-        if (user?.role !== 'admin' && !isSuperAdmin && user?.role !== 'corporate-admin') { 
-            currentCount = await incrementUsage(); 
-        }
-
+        const currentCount = await incrementUsage();
+        
         // Trigger CTA Vignette every 4th narration
         if (currentCount > 0 && currentCount % 4 === 0) {
             console.log(`[VoxGen CTA] Triggering vignette for narration #${currentCount}`);
