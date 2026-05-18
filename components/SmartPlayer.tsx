@@ -432,8 +432,17 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       setIsVignettePlaying(true);
       
       try {
-        const base64 = await generateSpeech(vignetteText, 'Kore');
-        const buffer = await decodeAudioData(base64, ctx);
+        let buffer: AudioBuffer;
+        
+        // Use cache for standard CTA vignette if it's already preloaded
+        if (!isIntro && vignetteBufferRef.current) {
+            buffer = vignetteBufferRef.current;
+        } else {
+            const base64 = await generateSpeech(vignetteText, 'Kore');
+            buffer = await decodeAudioData(base64, ctx);
+            // Cache it if it's the standard one
+            if (!isIntro) vignetteBufferRef.current = buffer;
+        }
         
         const source = ctx.createBufferSource();
         source.buffer = buffer;
@@ -458,6 +467,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
         console.error("[SmartPlayer] Erro fatal na reprodução da vinheta", e);
         setIsVignettePlaying(false);
         if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
+        startScheduler(); // Garantir que o agendador continue mesmo se a vinheta falhar
       }
   };
 
