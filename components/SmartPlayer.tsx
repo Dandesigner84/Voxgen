@@ -8,7 +8,7 @@ import { getCorporatePlaylist, saveCorporatePlaylist } from '../services/corpora
 import { generateSpeech } from '../services/geminiService';
 import { buscarYouTube, YouTubeSearchResult } from '../services/youtubeService';
 import { decodeAudioData, audioBufferToWav } from '../utils/audioUtils';
-import { VIGNETTE_TEXT } from '../constants';
+import { VIGNETTE_TEXT, INTRO_VIGNETTE_TEXT } from '../constants';
 import { getAllFeedbacks } from '../services/analyticsService';
 
 interface Track {
@@ -66,6 +66,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
   const [loopMode, setLoopMode] = useState<'off' | 'all' | 'one'>('all');
   const [isShuffle, setIsShuffle] = useState(false);
+  const [isFirstDailyUse, setIsFirstDailyUse] = useState(false);
   const [webInput, setWebInput] = useState('');
   const [intervalSeconds, setIntervalSeconds] = useState(60); 
   const [isSmartEqEnabled, setIsSmartEqEnabled] = useState(true);
@@ -115,6 +116,13 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
     };
     checkPremium();
     loadFeedbacks();
+
+    // Check for first daily use
+    const lastDate = localStorage.getItem('voxgen_last_player_use');
+    const today = new Date().toDateString();
+    if (lastDate !== today) {
+        setIsFirstDailyUse(true);
+    }
   }, []);
 
   const loadFeedbacks = async () => {
@@ -400,57 +408,50 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
       setIsPlaying(true);
 
-      // Lógica de Vinheta Aleatória: Tenta tocar se for a primeira vez ou random 30%
-      const shouldPlayVignette = (Math.random() > 0.7 || !hasPlayedVignetteRef.current);
+      // Lógica de Vinheta: Tenta tocar se for a primeira vez NO DIA, primeira no player ou random 30%
+      const shouldPlayVignette = isFirstDailyUse || (Math.random() > 0.7 || !hasPlayedVignetteRef.current);
       
       if (shouldPlayVignette) {
-          playVignette();
+          playVignette(isFirstDailyUse);
+          if (isFirstDailyUse) {
+              localStorage.setItem('voxgen_last_player_use', new Date().toDateString());
+              setIsFirstDailyUse(false);
+          }
       } else {
           if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
           startScheduler();
       }
   };
 
-  const playVignette = async () => {
+  const playVignette = async (isIntro: boolean = false) => {
       const ctx = initAudioContext();
+      const vignetteText = isIntro ? INTRO_VIGNETTE_TEXT : VIGNETTE_TEXT;
       
-      // Se não temos a vinheta carregada, tentamos carregar agora
-      if (!vignetteBufferRef.current) {
-          console.log("[SmartPlayer] Vinheta não encontrada em cache. Tentando carregar...");
-          try {
-              const base64 = await generateSpeech(VIGNETTE_TEXT, 'Kore');
-              const buffer = await decodeAudioData(base64, ctx);
-              vignetteBufferRef.current = buffer;
-          } catch (e) {
-              console.error("[SmartPlayer] Falha ao carregar vinheta sob demanda", e);
-              if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
-              startScheduler();
-              return;
-          }
-      }
-
-      console.log("[SmartPlayer] Iniciando reprodução da vinheta...");
+      console.log(`[SmartPlayer] Iniciando reprodução da vinheta (${isIntro ? 'Intro' : 'CTA'})...`);
       setIsVignettePlaying(true);
       
-      const source = ctx.createBufferSource();
-      source.buffer = vignetteBufferRef.current;
-      
-      // Conecta ao master bus com limiter
-      if (masterBusGainRef.current) {
-          source.connect(masterBusGainRef.current);
-      } else {
-          source.connect(ctx.destination);
-      }
-
-      source.onended = () => {
-          console.log("[SmartPlayer] Vinheta finalizada.");
-          setIsVignettePlaying(false);
-          hasPlayedVignetteRef.current = true;
-          if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
-          startScheduler();
-      };
-      
       try {
+        const base64 = await generateSpeech(vignetteText, 'Kore');
+        const buffer = await decodeAudioData(base64, ctx);
+        
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        
+        // Conecta ao master bus com limiter
+        if (masterBusGainRef.current) {
+            source.connect(masterBusGainRef.current);
+        } else {
+            source.connect(ctx.destination);
+        }
+
+        source.onended = () => {
+            console.log("[SmartPlayer] Vinheta finalizada.");
+            setIsVignettePlaying(false);
+            hasPlayedVignetteRef.current = true;
+            if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
+            startScheduler();
+        };
+        
         source.start(0);
       } catch(e) {
         console.error("[SmartPlayer] Erro fatal na reprodução da vinheta", e);
