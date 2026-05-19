@@ -17,7 +17,18 @@ import {
 } from "firebase/firestore";
 
 const FREE_LIMITS = {
-  NARRATIONS_PER_DAY: 3,
+  NARRATIONS_PER_WEEK: 1,
+};
+
+const isSameWeek = (timestamp: number) => {
+  const date = new Date(timestamp);
+  const now = new Date();
+  
+  // Simple check for same ISO week
+  // Calculate relative day of year/beginning of week
+  const oneDay = 24 * 60 * 60 * 1000;
+  const diff = now.getTime() - date.getTime();
+  return diff < 7 * oneDay && now.getDay() >= date.getDay();
 };
 
 // --- Admin Logic ---
@@ -83,6 +94,8 @@ export const getUserStatus = async (userEmail?: string): Promise<UserStatus> => 
     const today = new Date().toDateString();
     
     const narrationsToday = data.lastUsageDate === today ? (data.narrationsToday || 0) : 0;
+    const narrationsThisWeek = (data.lastNarrationAt && isSameWeek(data.lastNarrationAt)) ? (data.narrationsThisWeek || 0) : 0;
+    
     let plan: 'free' | 'premium' = 'free';
     
     if (data.expiryDate && data.expiryDate > Date.now()) {
@@ -92,7 +105,10 @@ export const getUserStatus = async (userEmail?: string): Promise<UserStatus> => 
     return {
       plan,
       expiryDate: data.expiryDate || null,
-      narrationsToday
+      narrationsToday,
+      narrationsThisWeek,
+      lastNarrationAt: data.lastNarrationAt || null,
+      isPromoUser: data.isPromoUser || false
     };
   } catch (error) {
     // Retorna valores padrão em caso de erro de conexão ou permissão inicial
@@ -136,7 +152,8 @@ export const redeemCode = async (codeStr: string, userEmail: string): Promise<{ 
         plan: 'premium',
         expiryDate: newExpiry,
         email: userEmail,
-        role: userData.role || 'user'
+        role: userData.role || 'user',
+        isPromoUser: true
       }, { merge: true });
 
       return codeData.days;
@@ -157,17 +174,20 @@ export const incrementUsage = async (): Promise<number> => {
 
   try {
     const userDoc = await getDoc(doc(db, path));
-    const userData = userDoc.exists() ? userDoc.data() : { narrationsToday: 0, lastUsageDate: '' };
+    const userData = userDoc.exists() ? userDoc.data() : { narrationsToday: 0, lastUsageDate: '', narrationsThisWeek: 0, lastNarrationAt: 0 };
     
-    let currentCount = userData.lastUsageDate === today ? (userData.narrationsToday || 0) : 0;
-    const newCount = currentCount + 1;
+    const today = new Date().toDateString();
+    let dailyCount = userData.lastUsageDate === today ? (userData.narrationsToday || 0) : 0;
+    let weeklyCount = (userData.lastNarrationAt && isSameWeek(userData.lastNarrationAt)) ? (userData.narrationsThisWeek || 0) : 0;
 
     await setDoc(doc(db, path), {
-      narrationsToday: newCount,
-      lastUsageDate: today
+      narrationsToday: dailyCount + 1,
+      lastUsageDate: today,
+      narrationsThisWeek: weeklyCount + 1,
+      lastNarrationAt: Date.now()
     }, { merge: true });
     
-    return newCount;
+    return dailyCount + 1;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
     return 0;
@@ -181,10 +201,10 @@ export const canGenerateNarration = async (): Promise<{ allowed: boolean; messag
     return { allowed: true };
   }
 
-  if (status.narrationsToday >= FREE_LIMITS.NARRATIONS_PER_DAY) {
+  if ((status.narrationsThisWeek || 0) >= FREE_LIMITS.NARRATIONS_PER_WEEK) {
     return { 
       allowed: false, 
-      message: `Limite diário do plano Free atingido (${FREE_LIMITS.NARRATIONS_PER_DAY}/${FREE_LIMITS.NARRATIONS_PER_DAY}). Insira um Código Premiado para continuar.` 
+      message: `Estamos em Período de Teste! O limite semanal do plano Free é de ${FREE_LIMITS.NARRATIONS_PER_WEEK} narração. Insira um Código Premiado para liberar criações ilimitadas!` 
     };
   }
 

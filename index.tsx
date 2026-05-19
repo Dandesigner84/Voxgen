@@ -3,12 +3,12 @@ import { createRoot } from 'react-dom/client';
 import './index.css';
 import App from './App';
 
-console.log('[DEBUG] App initialization starting...');
+console.log('[App] Inicializando aplicação React...');
 
 const container = document.getElementById('root');
 
 if (!container) {
-  console.error('[FATAL] Root container not found');
+  console.error('[App] Erro fatal: Elemento #root não encontrado no DOM.');
 } else {
   try {
     const root = createRoot(container);
@@ -17,8 +17,8 @@ if (!container) {
         <App />
       </React.StrictMode>
     );
-    console.log('[DEBUG] Initial render call completed');
-  } catch (err) {
-    console.error('[FATAL] Render failed:', err);
+    console.log('[App] Renderização iniciada com sucesso.');
+  } catch (error) {
+    console.error('[App] Falha ao montar a aplicação:', error);
   }
 }

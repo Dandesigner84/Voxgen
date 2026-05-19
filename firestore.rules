@@ -18,6 +18,7 @@ service cloud.firestore {
     }
     function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
     function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isOwnerByEmail(email) { return isSignedIn() && request.auth.token.email == email && request.auth.token.email_verified == true; }
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
     
@@ -90,6 +91,10 @@ service cloud.firestore {
 
     // --- Collection Rules ---
 
+    match /test/{docId} {
+      allow read: if true;
+    }
+
     match /admins/{userId} {
       allow read: if isSignedIn();
       allow write: if false; // Only manageable via console
@@ -132,9 +137,9 @@ service cloud.firestore {
     }
 
     match /customVoices/{voiceId} {
-      allow read: if (resource.data.category == 'official_approved') || (isSignedIn() && (isOwner(resource.data.userId) || isAdmin()));
-      allow create: if isSignedIn() && isValidId(voiceId) && isOwner(incoming().userId);
-      allow update, delete: if isSignedIn() && isValidId(voiceId) && (isOwner(existing().userId) || isAdmin());
+      allow read: if (resource.data.category == 'official_approved') || (isSignedIn() && (isOwnerByEmail(resource.data.userId) || isAdmin()));
+      allow create: if isSignedIn() && isValidId(voiceId) && isOwnerByEmail(incoming().userId);
+      allow update, delete: if isSignedIn() && isValidId(voiceId) && (isOwnerByEmail(existing().userId) || isAdmin());
     }
 
     match /narrations/{narrationId} {

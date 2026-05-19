@@ -38,108 +38,87 @@ const AppContent: React.FC = () => {
   const activeModeRef = useRef<AppMode>(AppMode.Home);
   
   useEffect(() => {
-    console.log('[DEBUG] AppContent mounted, starting Auth listener');
-    
-    // Safety fallback for auth loading
-    const safetyTimeout = setTimeout(() => {
-      if (authLoading) {
-        console.warn('[DEBUG] Auth loading taking too long, forcing false...');
-        setAuthLoading(false);
-      }
-    }, 5000);
-
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      try {
-        clearTimeout(safetyTimeout);
-        console.log('[DEBUG] Auth state changed:', firebaseUser ? `USER_LOGGED_IN (${firebaseUser.uid})` : 'NO_USER');
-        
-        if (firebaseUser) {
-          // Start tracking session if not already started
-          if (!sessionId) {
-              try {
-                const sid = await startSession(firebaseUser.uid);
-                setSessionId(sid);
-              } catch (se) {
-                console.warn('[DEBUG] Session tracking failed:', se);
-              }
-          }
-
-          // Define initial basic user info from Auth
-          const initialRole: UserRole = (firebaseUser.email === 'limadan389@gmail.com') ? 'admin' : 'user';
-          setUser({
-              email: firebaseUser.email || '',
-              role: initialRole,
-              isProfileComplete: undefined // Undefined until doc check
-          });
-
-          // Restore mode based on role on first load
-          setMode((prev) => {
-              if (prev === AppMode.Home) {
-                  return (initialRole === 'admin' || firebaseUser.email === 'limadan389@gmail.com') ? AppMode.Admin : AppMode.Narration;
-              }
-              return prev;
-          });
-
-          try {
-              const userDocRef = doc(db, 'users', firebaseUser.uid);
-              const userDoc = await getDoc(userDocRef);
-              
-              if (userDoc.exists()) {
-                  const data = userDoc.data();
-                  const actualRole = data.role as UserRole;
-                  setUser({
-                      email: firebaseUser.email || '',
-                      role: actualRole,
-                      companyName: data.companyName,
-                      isProfileComplete: data.isProfileComplete === true 
-                  });
-
-                  // Update mode
-                  if (actualRole === 'admin' || firebaseUser.email === 'limadan389@gmail.com') {
-                      setMode(AppMode.Admin);
-                  }
-
-                  // Load History (soft failure allowed)
-                  try {
-                    const ctx = audioContextRef.current || new (window.AudioContext || (window as any).webkitAudioContext)();
-                    const savedHistory = await getUserNarrations(firebaseUser.uid, ctx);
-                    setHistory(savedHistory);
-                    if (!audioContextRef.current) ctx.close();
-                  } catch (he) {
-                    console.warn('[DEBUG] History load failed:', he);
-                  }
-              } else {
-                  // Create user doc if missing
-                  const role: UserRole = (firebaseUser.email === 'limadan389@gmail.com') ? 'admin' : 'user';
-                  const newUser = {
-                      email: firebaseUser.email || '',
-                      phoneNumber: firebaseUser.phoneNumber || '',
-                      role: role,
-                      plan: 'free',
-                      narrationsToday: 0,
-                      createdAt: Date.now(),
-                      isProfileComplete: false,
-                      lastUsageDate: ''
-                  };
-                  await setDoc(userDocRef, newUser, { merge: true });
-                  setUser({
-                      email: firebaseUser.email || '',
-                      role: role,
-                      isProfileComplete: false
-                  });
-              }
-          } catch (e) {
-              console.error("Auth sync error:", e);
-          }
-        } else {
-          setUser(null);
-          if (!authLoading) setMode(AppMode.Home);
+      if (firebaseUser) {
+        // Start tracking session if not already started
+        if (!sessionId) {
+            const sid = await startSession(firebaseUser.uid);
+            setSessionId(sid);
         }
-      } catch (fatal) {
-        console.error('[FATAL] Auth callback failed:', fatal);
-      } finally {
-        setAuthLoading(false);
+
+        // Define initial basic user info from Auth
+        const initialRole: UserRole = (firebaseUser.email === 'limadan389@gmail.com') ? 'admin' : 'user';
+        setUser({
+            email: firebaseUser.email || '',
+            role: initialRole,
+            isProfileComplete: undefined // Undefined until doc check
+        });
+
+        // Restore mode based on role on first load
+        setMode((prev) => {
+            if (prev === AppMode.Home) {
+                return (initialRole === 'admin' || firebaseUser.email === 'limadan389@gmail.com') ? AppMode.Admin : AppMode.Narration;
+            }
+            return prev;
+        });
+
+        try {
+            const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+            if (userDoc.exists()) {
+                const data = userDoc.data();
+                const actualRole = data.role as UserRole;
+                setUser({
+                    email: firebaseUser.email || '',
+                    role: actualRole,
+                    companyName: data.companyName,
+                    isProfileComplete: data.isProfileComplete === true,
+                    isPromoUser: data.isPromoUser || false
+                });
+
+                // Update mode if it was decided based on initialRole and it changed
+                if (actualRole === 'admin' || firebaseUser.email === 'limadan389@gmail.com') {
+                    setMode(AppMode.Admin);
+                }
+
+                // Load History
+                if (audioContextRef.current) {
+                  const savedHistory = await getUserNarrations(firebaseUser.uid, audioContextRef.current);
+                  setHistory(savedHistory);
+                } else {
+                   const tempCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+                   const savedHistory = await getUserNarrations(firebaseUser.uid, tempCtx);
+                   setHistory(savedHistory);
+                   tempCtx.close();
+                }
+            } else {
+                // Create user doc if missing
+                const role: UserRole = (firebaseUser.email === 'limadan389@gmail.com') ? 'admin' : 'user';
+                const newUser = {
+                    email: firebaseUser.email || '',
+                    phoneNumber: firebaseUser.phoneNumber || '',
+                    role: role,
+                    plan: 'free',
+                    narrationsToday: 0,
+                    createdAt: Date.now(),
+                    isProfileComplete: false
+                };
+                await setDoc(doc(db, 'users', firebaseUser.uid), newUser, { merge: true });
+                setUser({
+                    email: firebaseUser.email || '',
+                    role: role,
+                    isProfileComplete: false
+                });
+            }
+        } catch (e) {
+            console.error("Auth sync warning:", e);
+        }
+      } else {
+        setUser(null);
+        // Only reset mode to home if we just logged out, 
+        // helping to keep state during initial load.
+        if (!authLoading) setMode(AppMode.Home);
       }
+      setAuthLoading(false);
     });
 
     return () => unsubscribe();
@@ -359,12 +338,15 @@ const AppContent: React.FC = () => {
         
         // Monetization & Vignette Trigger
         let currentCount = 0;
-        if (user?.role !== 'admin' && !isSuperAdmin && user?.role !== 'corporate-admin') {
-            currentCount = await incrementUsage();
+        if (user?.role !== 'admin' && !isSuperAdmin && user?.role !== 'corporate-admin') { 
+            currentCount = await incrementUsage(); 
         }
+
+        // Trigger CTA Vignette every 3rd narration for non-premium or promo users
+        const isPromo = user?.isPromoUser;
+        const needsCTAVignette = (user?.role !== 'admin' && !isSuperAdmin && user?.role !== 'corporate-admin') || isPromo;
         
-        // Trigger CTA Vignette every 4th narration
-        if (currentCount > 0 && currentCount % 4 === 0) {
+        if (needsCTAVignette && currentCount > 0 && currentCount % 3 === 0) {
             console.log(`[VoxGen CTA] Triggering vignette for narration #${currentCount}`);
             setTimeout(async () => {
                 try {

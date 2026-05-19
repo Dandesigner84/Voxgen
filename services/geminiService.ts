@@ -8,17 +8,6 @@ const STORAGE_KEYS = {
   CUSTOM_VOICES: 'voxgen_custom_voices_v1'
 };
 
-const getClient = () => {
-  const rawKey = process.env.GEMINI_API_KEY || "";
-  
-  if (!rawKey || rawKey === "undefined" || rawKey === "null") {
-      console.error("[Gemini] API Key is missing or invalid. Verify your environment variables.");
-  }
-  
-  const cleanKey = rawKey.replace(/["'\s]/g, ""); 
-  return new GoogleGenAI({ apiKey: cleanKey });
-};
-
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 import { getApprovedVoices } from "./voiceService";
@@ -26,7 +15,11 @@ import { getApprovedVoices } from "./voiceService";
 let customVoicesCache: CustomVoice[] = [];
 
 const updateVoicesCache = async () => {
+  try {
     customVoicesCache = await getApprovedVoices();
+  } catch (e) {
+    console.warn("[Gemini Service] Could not update voices cache:", e);
+  }
 };
 
 // Update cache every 2 minutes
@@ -44,7 +37,6 @@ const getMimeTypeFromBase64 = (base64String: string, defaultType: string = 'audi
 };
 
 export const refineText = async (text: string, tone: ToneType | string, useBackgroundMusic: boolean): Promise<string> => {
-  const ai = getClient();
   let specificInstruction = "";
   
   if (useBackgroundMusic) {
@@ -73,54 +65,38 @@ export const refineText = async (text: string, tone: ToneType | string, useBackg
       specificInstruction += " ESTILO REVIEW: Conversacional, honesto, detalhando características de um produto ou serviço. ";
   }
 
-  const prompt = `
-    Você é um roteirista de áudio profissional (PT-BR) da VoxGen.
-    Tarefa: Humanizar o texto para o tom: "${tone}".
-    ${specificInstruction}
-    
-    IMPORTANTE - EFEITOS SONOROS (SFX):
-    Você DEVE inserir comandos de efeitos sonoros entre PARÊNTESES onde fizer sentido para o contexto.
-    Comandos aceitos: (buzina), (explosao), (aplausos), (risada), (caixa), (sino), (brinde), (laser), (coin).
-    
-    REGRAS:
-    1. Mantenha a mensagem original.
-    2. Retorne APENAS o texto final. Sem introduções.
-    
-    Texto Original: "${text}"
-  `;
-
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: prompt,
+    const res = await fetch("/api/gemini/refine", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, tone, specificInstruction })
     });
     
-    let cleanedText = response.text?.trim() || text;
-    cleanedText = cleanedText.replace(/^["']|["']$/g, "").trim();
-    return cleanedText;
-  } catch (e) {
-    return text; 
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    return data.text || text;
+  } catch (e: any) {
+    console.error("[Gemini Service] Refine error:", e);
+    return text;
   }
 };
 
 export const addAutomaticSFX = async (text: string): Promise<string> => {
   if (!text.trim()) return text;
-  const ai = getClient();
   const availableSFX = SFX_COMMANDS_HELP.join(', ');
 
-  const prompt = `
-    Analise o texto e insira tags de efeitos sonoros contextuais.
-    TAGS: ${availableSFX}
-    TEXTO: "${text}"
-  `;
-
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: prompt,
+    const res = await fetch("/api/gemini/sfx", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, availableSFX })
     });
-    return response.text?.trim() || text;
-  } catch (e) {
+    
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    return data.text || text;
+  } catch (e: any) {
+    console.error("[Gemini Service] SFX error:", e);
     return text;
   }
 };
@@ -128,140 +104,86 @@ export const addAutomaticSFX = async (text: string): Promise<string> => {
 const callTTS = async (textChunk: string, voiceName: string, isCustom: boolean): Promise<string> => {
     if (!textChunk.trim()) return "";
     
-    // Support for OpenAI Voices
-    if (voiceName.endsWith('-OI')) {
-        const apiKey = process.env.OPENAI_API_KEY;
-        if (!apiKey || apiKey === "undefined") {
-            throw new Error("API Key do OpenAI não configurada. Fale com o administrador.");
-        }
-        
-        const cleanVoice = voiceName.split('-')[0].toLowerCase();
-        try {
-            const response = await fetch("https://api.openai.com/v1/audio/speech", {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${apiKey}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    model: "tts-1-hd",
-                    voice: cleanVoice,
-                    input: textChunk
-                })
-            });
+    const effectiveVoice = voiceName.split('-')[0];
+    const customVoiceData = getCustomVoiceById(effectiveVoice);
 
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(`OpenAI: ${err.error?.message || response.statusText}`);
-            }
+    const res = await fetch("/api/gemini/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: textChunk, voice: voiceName, customVoiceData })
+    });
 
-            const arrayBuffer = await response.arrayBuffer();
-            const bytes = new Uint8Array(arrayBuffer);
-            let binary = '';
-            for (let i = 0; i < bytes.byteLength; i++) {
-                binary += String.fromCharCode(bytes[i]);
-            }
-            return window.btoa(binary);
-        } catch (e: any) {
-            throw new Error(`Erro OpenAI: ${e.message}`);
-        }
+    if (!res.ok) {
+      const errorMsg = await res.text();
+      throw new Error(errorMsg);
     }
-
-    const ai = getClient();
-    const MAX_RETRIES = 5;
-    let effectiveVoice = voiceName.split('-')[0];
-    
-    // Safety mapping for Gemini Prebuilt Voices
-    const validGeminiVoices = ['Puck', 'Charon', 'Kore', 'Fenrir', 'Aoede'];
-    if (!validGeminiVoices.includes(effectiveVoice) && !voiceName.includes('-')) {
-        // Fallback to Kore if voice is unknown
-    }
-
-    const customVoiceData = !validGeminiVoices.includes(effectiveVoice) && !voiceName.includes('-') 
-        ? getCustomVoiceById(effectiveVoice) 
-        : null;
-
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        try {
-            console.log(`[Gemini TTS] Attempt ${attempt} for voice: ${effectiveVoice}`);
-            if (customVoiceData && customVoiceData.audioSampleBase64) {
-                const mimeType = getMimeTypeFromBase64(customVoiceData.audioSampleBase64);
-                const base64Sample = customVoiceData.audioSampleBase64.split(',')[1] || customVoiceData.audioSampleBase64;
-                const response = await ai.models.generateContent({
-                    model: "gemini-1.5-flash",
-                    contents: {
-                        parts: [
-                            { inlineData: { mimeType: mimeType, data: base64Sample } },
-                            { text: `Leia exatamente em Português Brasil: "${textChunk}"` }
-                        ]
-                    },
-                    config: { responseModalities: [Modality.AUDIO] }
-                });
-                return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
-            } 
-            
-            // Map to a valid voice if not standard
-            const finalVoice = validGeminiVoices.includes(effectiveVoice) ? effectiveVoice : 'Kore';
-            
-            const response = await ai.models.generateContent({
-                model: "gemini-1.5-flash",
-                contents: [{ parts: [{ text: textChunk }] }],
-                config: {
-                    responseModalities: [Modality.AUDIO],
-                    speechConfig: {
-                        voiceConfig: { prebuiltVoiceConfig: { voiceName: finalVoice } },
-                    },
-                },
-            });
-            return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
-        } catch (e: any) {
-            const isQuotaError = e.message?.includes("RESOURCE_EXHAUSTED") || e.message?.includes("429");
-            const backoffTime = isQuotaError ? Math.pow(2, attempt) * 2000 : Math.pow(2, attempt) * 1000;
-            
-            console.warn(`[Gemini TTS] Attempt ${attempt} failed: ${e.message}. Retrying in ${backoffTime}ms...`);
-            await wait(backoffTime);
-            
-            if (attempt === MAX_RETRIES) throw new Error(`Gemini API Quota/Error: ${e.message || "Unknown error"}`);
-        }
-    }
-    throw new Error("Falha ao chamar API Gemini após múltiplas tentativas.");
+    const data = await res.json();
+    return data.base64 || "";
 };
 
 export const generateSpeech = async (rawText: string, voice: string): Promise<string> => {
-  const sfxRegex = /(\(.*?\))/g;
-  const parts = rawText.split(sfxRegex);
-  if (parts.length === 1) return await callTTS(rawText, voice, false);
-  const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-  const audioBuffers: AudioBuffer[] = [];
+  try {
+    const sfxRegex = /(\(.*?\))/g;
+    const parts = rawText.split(sfxRegex);
+    
+    if (parts.length === 1) return await callTTS(rawText, voice, false);
+    
+    // Create ctx with specific sample rate for TTS (24kHz is standard for Gemini)
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+    const audioBuffers: AudioBuffer[] = [];
 
-  for (const part of parts) {
-      const segment = part.trim();
-      if (!segment) continue;
-      
-      // Delay to avoid hitting rate limits on rapid sequential calls
-      await wait(300);
+    try {
+        for (const part of parts) {
+            const segment = part.trim();
+            if (!segment) continue;
+            
+            // Minimal delay to prevent burst limit
+            await wait(200);
 
-      if (segment.startsWith('(') && segment.endsWith(')')) {
-          const keyword = segment.slice(1, -1);
-          try {
-             const sfxBuffer = await generateProceduralSFX(keyword, ctx);
-             audioBuffers.push(sfxBuffer);
-          } catch (e) {}
-      } else {
-          const ttsBase64 = await callTTS(segment, voice, false);
-          if (ttsBase64) {
-              const ttsBuffer = await decodeAudioData(ttsBase64, ctx);
-              audioBuffers.push(ttsBuffer);
-          }
-      }
+            if (segment.startsWith('(') && segment.endsWith(')')) {
+                const keyword = segment.slice(1, -1);
+                try {
+                    const sfxBuffer = await generateProceduralSFX(keyword, ctx);
+                    audioBuffers.push(sfxBuffer);
+                } catch (e) {
+                    console.warn(`[Gemini Service] SFX fail: ${keyword}`, e);
+                }
+            } else {
+                const ttsBase64 = await callTTS(segment, voice, false);
+                if (ttsBase64) {
+                    const ttsBuffer = await decodeAudioData(ttsBase64, ctx);
+                    audioBuffers.push(ttsBuffer);
+                }
+            }
+        }
+
+        if (audioBuffers.length === 0) throw new Error("Nenhum áudio gerado.");
+
+        const finalBuffer = concatenateAudioBuffers(audioBuffers, ctx);
+        const wavBlob = (await import("../utils/audioUtils")).audioBufferToWav(finalBuffer);
+        
+        const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const result = (reader.result as string).split(',')[1];
+                resolve(result);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(wavBlob);
+        });
+
+        // Clean up context to avoid browser limits
+        await ctx.close();
+        return base64;
+
+    } catch (innerError) {
+        if (ctx.state !== 'closed') await ctx.close();
+        throw innerError;
+    }
+  } catch (e: any) {
+    console.error("[Gemini Service] Critical Speech Gen Error:", e);
+    throw new Error(e.message || "Falha ao gerar narração. Verifique sua conexão e limites.");
   }
-  const finalBuffer = concatenateAudioBuffers(audioBuffers, ctx);
-  const wavBlob = (await import("../utils/audioUtils")).audioBufferToWav(finalBuffer);
-  return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-      reader.readAsDataURL(wavBlob);
-  });
 };
 
 export const analyzeVoiceQuality = async (audioBase64: string, expectedText: string): Promise<any> => { return { clarityScore: 85, feedback: "Boa dicção." }; };
@@ -270,39 +192,17 @@ export const generateImage = async (p: string, s: string, r?: string, l?: string
 export const generateAvatarVideo = async (i: string, p: string): Promise<string> => { return ""; };
 
 export const generateSongMetadata = async (description: string, lyrics?: string): Promise<any> => {
-  const ai = getClient();
-  const prompt = `
-    Como um assistente de estúdio musical IA, analise a descrição e as letras (se houver) para sugerir metadados para uma música.
-    Descrição: ${description}
-    Letras: ${lyrics || "Instrumental"}
-    
-    Retorne um JSON com:
-    - title: Título criativo
-    - lyrics: Letras completas (ou as fornecidas, ou geradas se for modo simples)
-    - styleTag: Tag curta de estilo (ex: "Pop Animado", "Heavy Metal")
-    - coverColor: Cor hexadecimal para a capa
-  `;
-
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            title: { type: Type.STRING },
-            lyrics: { type: Type.STRING },
-            styleTag: { type: Type.STRING },
-            coverColor: { type: Type.STRING }
-          },
-          required: ["title", "lyrics", "styleTag", "coverColor"]
-        }
-      }
+    const res = await fetch("/api/gemini/song-metadata", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description, lyrics })
     });
-    return JSON.parse(response.text || "{}");
+    
+    if (!res.ok) throw new Error(await res.text());
+    return await res.json();
   } catch (e) {
+    console.error("[Gemini Service] Music metadata error:", e);
     return {
       title: "Nova Música",
       lyrics: lyrics || "Sem letra.",
@@ -314,30 +214,19 @@ export const generateSongMetadata = async (description: string, lyrics?: string)
 
 export const summarizeText = async (text: string): Promise<string> => {
   if (!text.trim()) return text;
-  const ai = getClient();
-
-  const prompt = `
-    Você é um especialista em síntese de conteúdo.
-    Tarefa: Resumir o texto abaixo mantendo os pontos principais, mas reduzindo drasticamente o número de palavras (em cerca de 70-80%).
-    O objetivo é preparar o texto para uma narração curta e objetiva.
-    
-    REGRAS:
-    1. Retorne APENAS o resumo final em Português Brasil.
-    2. Linguagem natural e fluida para áudio.
-    3. Mantenha a essência e os fatos principais.
-    
-    TEXTO PARA RESUMIR:
-    "${text}"
-  `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: prompt,
+    const res = await fetch("/api/gemini/summarize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text })
     });
-    return response.text?.trim() || text;
-  } catch (e) {
-    console.error("Erro ao resumir:", e);
+    
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    return data.text || text;
+  } catch (e: any) {
+    console.error("[Gemini Service] Summarize error:", e);
     return text;
   }
 };

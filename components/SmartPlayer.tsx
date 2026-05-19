@@ -2,13 +2,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Radio, Upload, Play, Pause, SkipForward, Mic2, Clock, Youtube, Trash2, Link, Smartphone, Music, CheckSquare, Square, Lock, Sliders, Volume2, CloudUpload, Repeat, Repeat1, Shuffle, FileAudio, Check, AlertCircle, Loader2, Search, Star } from 'lucide-react';
 import { AudioItem, UserRole, UserFeedback } from '../types';
-import { isSmartPlayerUnlocked } from '../services/monetizationService';
+import { isSmartPlayerUnlocked, getUserStatus } from '../services/monetizationService';
 import { usePlatformDetection } from '../hooks/usePlatformDetection';
 import { getCorporatePlaylist, saveCorporatePlaylist } from '../services/corporateService';
 import { generateSpeech } from '../services/geminiService';
 import { buscarYouTube, YouTubeSearchResult } from '../services/youtubeService';
 import { decodeAudioData, audioBufferToWav } from '../utils/audioUtils';
-import { VIGNETTE_TEXT, INTRO_VIGNETTE_TEXT } from '../constants';
+import { VIGNETTE_TEXT } from '../constants';
 import { getAllFeedbacks } from '../services/analyticsService';
 
 interface Track {
@@ -66,7 +66,6 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
   const [loopMode, setLoopMode] = useState<'off' | 'all' | 'one'>('all');
   const [isShuffle, setIsShuffle] = useState(false);
-  const [isFirstDailyUse, setIsFirstDailyUse] = useState(false);
   const [webInput, setWebInput] = useState('');
   const [intervalSeconds, setIntervalSeconds] = useState(60); 
   const [isSmartEqEnabled, setIsSmartEqEnabled] = useState(true);
@@ -103,6 +102,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
   const { isIOS } = usePlatformDetection();
   const [isPremium, setIsPremium] = useState(false);
+  const [isPromoUser, setIsPromoUser] = useState(false);
   const isSmartEqEnabledRef = useRef(isSmartEqEnabled);
   const isCorpAdmin = userRole === 'corporate-admin';
   const isCorpUser = userRole === 'corporate-user';
@@ -111,22 +111,12 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
   useEffect(() => {
     const checkPremium = async () => {
-      const p = await isSmartPlayerUnlocked();
-      setIsPremium(p);
+      const status = await getUserStatus();
+      setIsPremium(status.plan === 'premium');
+      setIsPromoUser(status.isPromoUser || false);
     };
     checkPremium();
     loadFeedbacks();
-
-    // Check for first daily use
-    try {
-      const lastDate = localStorage.getItem('voxgen_last_player_use');
-      const today = new Date().toDateString();
-      if (lastDate !== today) {
-          setIsFirstDailyUse(true);
-      }
-    } catch (e) {
-      console.warn("[SmartPlayer] LocalStorage not accessible", e);
-    }
   }, []);
 
   const loadFeedbacks = async () => {
@@ -387,109 +377,88 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       }
     }, [isYtReady, isPlaying, currentTrackIndex, isVignettePlaying]);
 
-  const handleMainPlay = async () => {
-    const ctx = initAudioContext();
+  const handleMainPlay = () => {
+      const ctx = initAudioContext();
 
-    if (isPlaying) {
-      setIsPlaying(false);
-      
-      if (narrationSourceNodeRef.current) {
-        try { narrationSourceNodeRef.current.stop(); } catch (e) {}
-        narrationSourceNodeRef.current = null;
-      }
-      isNarratingRef.current = false;
-      setIsNarratingUI(false);
-      
-      restoreVolume(0.1);
+      if (isPlaying) {
+          setIsPlaying(false);
+          
+          if (narrationSourceNodeRef.current) {
+              try { narrationSourceNodeRef.current.stop(); } catch (e) {}
+              narrationSourceNodeRef.current = null;
+          }
+          isNarratingRef.current = false;
+          setIsNarratingUI(false);
+          
+          restoreVolume(0.1);
 
-      if (ctx.state === 'running') ctx.suspend();
-      pauseTrack();
-      stopScheduler();
-      return;
-    }
-
-    if (ctx.state === 'suspended') {
-      try {
-        await ctx.resume();
-      } catch (e) {
-        console.warn("[SmartPlayer] Falha ao resumir AudioContext:", e);
-      }
-    }
-
-    setIsPlaying(true);
-    startScheduler(); // Inicia o scheduler IMEDIATAMENTE ao clicar Play
-
-    // Lógica de Vinheta: Tenta tocar se for a primeira vez NO DIA, primeira no player ou random 30%
-    const shouldPlayVignette = isFirstDailyUse || (Math.random() > 0.7 || !hasPlayedVignetteRef.current);
-    
-    if (shouldPlayVignette) {
-      playVignette(isFirstDailyUse);
-      if (isFirstDailyUse) {
-        try {
-          localStorage.setItem('voxgen_last_player_use', new Date().toDateString());
-          setIsFirstDailyUse(false);
-        } catch (e) {
-          console.warn("[SmartPlayer] LocalStorage setItem não suportado");
-        }
-      }
-    } else {
-      if (playlist.length > 0) {
-        if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
-      }
-    }
-  };
-
-  const playVignette = async (isIntro: boolean = false) => {
-    const ctx = initAudioContext();
-    const vignetteText = isIntro ? INTRO_VIGNETTE_TEXT : VIGNETTE_TEXT;
-    
-    console.log(`[SmartPlayer] Preparando vinheta (${isIntro ? 'Intro' : 'CTA'})...`);
-    setIsVignettePlaying(true);
-    
-    // Timeout de segurança: Se em 10 segundos a vinheta não tocar, cancelamos
-    const timeout = setTimeout(() => {
-        if (isVignettePlayingRef.current) {
-            console.warn("[SmartPlayer] Timeout na geração da vinheta. Pulando...");
-            setIsVignettePlaying(false);
-            if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
-        }
-    }, 10000);
-
-    try {
-      const base64 = await generateSpeech(vignetteText, 'Kore');
-      const buffer = await decodeAudioData(base64, ctx);
-      
-      clearTimeout(timeout);
-      
-      if (!isPlayingRef.current) {
-          setIsVignettePlaying(false);
+          if (ctx.state === 'running') ctx.suspend();
+          pauseTrack();
+          stopScheduler();
           return;
       }
 
+      if (ctx.state === 'suspended') ctx.resume();
+
+      setIsPlaying(true);
+
+      // Lógica de Vinheta Aleatória: Tenta tocar se for a primeira vez ou random 30%
+      const shouldPlayVignette = (Math.random() > 0.7 || !hasPlayedVignetteRef.current);
+      
+      if (shouldPlayVignette) {
+          playVignette();
+      } else {
+          if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
+          startScheduler();
+      }
+  };
+
+  const playVignette = async () => {
+      const ctx = initAudioContext();
+      
+      // Se não temos a vinheta carregada, tentamos carregar agora
+      if (!vignetteBufferRef.current) {
+          console.log("[SmartPlayer] Vinheta não encontrada em cache. Tentando carregar...");
+          try {
+              const base64 = await generateSpeech(VIGNETTE_TEXT, 'Kore');
+              const buffer = await decodeAudioData(base64, ctx);
+              vignetteBufferRef.current = buffer;
+          } catch (e) {
+              console.error("[SmartPlayer] Falha ao carregar vinheta sob demanda", e);
+              if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
+              startScheduler();
+              return;
+          }
+      }
+
+      console.log("[SmartPlayer] Iniciando reprodução da vinheta...");
+      setIsVignettePlaying(true);
+      
       const source = ctx.createBufferSource();
-      source.buffer = buffer;
+      source.buffer = vignetteBufferRef.current;
       
       // Conecta ao master bus com limiter
       if (masterBusGainRef.current) {
-        source.connect(masterBusGainRef.current);
+          source.connect(masterBusGainRef.current);
       } else {
-        source.connect(ctx.destination);
+          source.connect(ctx.destination);
       }
 
       source.onended = () => {
-        console.log("[SmartPlayer] Vinheta finalizada.");
-        setIsVignettePlaying(false);
-        hasPlayedVignetteRef.current = true;
-        if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
+          console.log("[SmartPlayer] Vinheta finalizada.");
+          setIsVignettePlaying(false);
+          hasPlayedVignetteRef.current = true;
+          if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
+          startScheduler();
       };
       
-      source.start(0);
-    } catch(e) {
-      console.error("[SmartPlayer] Erro fatal na reprodução da vinheta", e);
-      clearTimeout(timeout);
-      setIsVignettePlaying(false);
-      if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
-    }
+      try {
+        source.start(0);
+      } catch(e) {
+        console.error("[SmartPlayer] Erro fatal na reprodução da vinheta", e);
+        setIsVignettePlaying(false);
+        if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
+      }
   };
 
   const playTrack = (track: Track) => {
@@ -736,7 +705,10 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
   const playNarration = () => {
       const ctx = initAudioContext(); 
       let buffer: AudioBuffer | null = null;
-      if (!isPremium && narrationsSinceVignetteRef.current >= 4 && vignetteBufferRef.current) {
+      
+      const needsVignette = (!isPremium || isPromoUser) && narrationsSinceVignetteRef.current >= 3;
+
+      if (needsVignette && vignetteBufferRef.current) {
           buffer = vignetteBufferRef.current;
           narrationsSinceVignetteRef.current = 0;
       } else {
@@ -764,7 +736,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                   const uploadItem = uploadedNarrations.find(u => u.id === randomId);
                   if (uploadItem) buffer = uploadItem.buffer;
               }
-              if (buffer && !isPremium) narrationsSinceVignetteRef.current += 1;
+              if (buffer && (!isPremium || isPromoUser)) narrationsSinceVignetteRef.current += 1;
           }
       }
       if (!buffer) {
@@ -1037,8 +1009,25 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
   return (
     <div className="max-w-6xl mx-auto w-full px-4 animate-fade-in pb-20 relative">
-        <div id="youtube-player-hidden" className="fixed top-0 left-0 w-[1px] h-[1px] opacity-1 pointer-events-none z-[-1]"></div>
+        <div id="youtube-player-hidden" className="fixed top-[-9999px] left-[-9999px] opacity-0 pointer-events-none"></div>
         <input ref={fileInputRef} type="file" accept="audio/*,.mpeg,.mpg" multiple className="hidden" onChange={handleFileSelect} />
+        
+        {/* Banner de Atualização */}
+        <div className="mb-6 bg-gradient-to-r from-indigo-600/20 to-cyan-600/20 border border-indigo-500/30 rounded-2xl p-4 flex items-center justify-between backdrop-blur-sm shadow-xl shadow-indigo-500/5">
+            <div className="flex items-center gap-3">
+                <div className="bg-gradient-to-br from-indigo-500 to-cyan-500 p-2.5 rounded-xl shadow-lg ring-1 ring-white/20">
+                    <Radio size={20} className="text-white" />
+                </div>
+                <div>
+                    <h4 className="text-white font-bold text-sm tracking-tight">VoxGen v2.5: Período de Teste! 🚀</h4>
+                    <p className="text-indigo-200/80 text-[11px] leading-tight max-w-sm">Criação de narrações liberada para todos os usuários (1 por semana). Aproveite para testar a nova atualização!</p>
+                </div>
+            </div>
+            <div className="hidden md:flex flex-col items-end">
+                <span className="bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20 text-[9px] font-black text-indigo-300 uppercase tracking-widest">Update Release</span>
+                <span className="text-[10px] text-slate-500 mt-1 font-medium">✨ Unlimited for Premium</span>
+            </div>
+        </div>
         
         {pendingUploads.length > 0 && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in">
@@ -1077,7 +1066,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
         </div>
 
         <div className="bg-slate-800/50 border border-slate-700 rounded-3xl p-8 mb-8 relative overflow-hidden min-h-[400px] flex flex-col items-center justify-center transition-all duration-500 group">
-             <div className={`absolute inset-0 opacity-20 blur-3xl transition-colors duration-700 ${isNarratingUI ? 'bg-cyan-600' : 'bg-gradient-to-br from-cyan-500 to-blue-600'}`} />
+             <div className={`absolute inset-0 opacity-20 blur-3xl transition-colors duration-700 ${isNarratingRef.current ? 'bg-cyan-600' : 'bg-gradient-to-br from-cyan-500 to-blue-600'}`} />
              
              <div className="relative z-10 flex flex-col items-center w-full">
                  {currentTrack?.type === 'spotify' ? (
@@ -1098,7 +1087,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                                       <h3 className="text-white font-bold text-lg">Iniciar Sistema</h3>
                                  </div>
                              )}
-                             {isNarratingUI && (
+                             {isNarratingRef.current && (
                                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10"><div className="bg-black/80 backdrop-blur-md rounded-2xl p-4 flex flex-col items-center border border-cyan-500/30"><Mic2 size={32} className="text-cyan-400 animate-pulse mb-2" /><span className="text-cyan-400 font-bold text-xs">Narrando...</span></div></div>
                              )}
                          </div>
@@ -1115,15 +1104,15 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                              {currentTrack ? (
                                  currentTrack.type === 'youtube' ? <img src={currentTrack.thumbnail} className="w-full h-full object-cover" /> : <div className="bg-gradient-to-br from-slate-700 to-slate-800 w-full h-full flex items-center justify-center"><Mic2 size={64} className="text-slate-500 opacity-50" /></div>
                              ) : <div className="text-slate-600">Sem Faixa</div>}
-                             {isNarratingUI && <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm"><Mic2 size={48} className="text-cyan-400 animate-pulse" /></div>}
+                             {isNarratingRef.current && <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm"><Mic2 size={48} className="text-cyan-400 animate-pulse" /></div>}
                         </div>
-                        <h3 className="text-xl font-bold text-white mb-1 text-center line-clamp-1 max-w-md">{isVignettePlaying ? "Iniciando Transmissão..." : (currentTrack?.name || (isPlaying ? (playlist.length === 0 ? "Narração Ativa" : "Carregando...") : "Aguardando..."))}</h3>
+                        <h3 className="text-xl font-bold text-white mb-1 text-center line-clamp-1 max-w-md">{currentTrack?.name || (isPlaying ? "Carregando..." : "Aguardando...")}</h3>
                         
                         <div className="flex items-center gap-6 mt-6">
                              <button onClick={() => setLoopMode(prev => prev === 'off' ? 'all' : prev === 'all' ? 'one' : 'off')} className={`p-3 rounded-full transition-all ${loopMode !== 'off' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-500 hover:text-white'}`}>
                                  {loopMode === 'one' ? <Repeat1 size={18} /> : <Repeat size={18} />}
                              </button>
-                             <button onClick={handleMainPlay} className={`w-20 h-20 rounded-full flex items-center justify-center transition-all ${isPlaying ? 'bg-cyan-500 text-black shadow-lg scale-105' : 'bg-slate-700 text-white hover:bg-slate-600'}`}>
+                             <button onClick={handleMainPlay} disabled={playlist.length === 0} className={`w-20 h-20 rounded-full flex items-center justify-center transition-all ${isPlaying ? 'bg-cyan-500 text-black shadow-lg scale-105' : 'bg-slate-700 text-white hover:bg-slate-600'}`}>
                                  {isPlaying ? <Pause size={32} fill="black" /> : <Play size={32} fill="white" className="ml-2" />}
                              </button>
                              <button onClick={handleNextTrack} className="p-4 rounded-full bg-slate-800 text-slate-400 hover:text-white"><SkipForward size={24} /></button>
@@ -1323,6 +1312,29 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                     </div>
                 </div>
             </div>
+        </div>
+        <div className="flex justify-center mt-12 gap-4">
+            <button 
+                onClick={() => {
+                   const comment = prompt("O que você está achando do VoxGen? Deixe sua avaliação:");
+                   if (comment) {
+                       const rating = parseInt(prompt("De 1 a 5, qual sua nota?") || "5");
+                       import('../services/analyticsService').then(service => {
+                           service.submitFeedback({
+                               userId: userEmail || 'guest',
+                               userName: userEmail?.split('@')[0] || 'Usuário',
+                               userEmail: userEmail || 'anonimo@voxgen.ai',
+                               rating: Math.min(5, Math.max(1, rating)),
+                               comment
+                           });
+                           alert("Obrigado pelo seu feedback! Sua avaliação foi enviada para moderação.");
+                       });
+                   }
+                }}
+                className="px-6 py-3 bg-slate-900 border border-slate-800 rounded-2xl text-slate-400 text-xs font-black uppercase tracking-widest hover:text-white hover:border-indigo-500 transition-all flex items-center gap-2 group"
+            >
+                <Star size={16} className="group-hover:text-amber-500 group-hover:fill-amber-500 transition-colors" /> Avaliar VoxGen
+            </button>
         </div>
     </div>
   );
