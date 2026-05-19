@@ -417,6 +417,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
     }
 
     setIsPlaying(true);
+    startScheduler(); // Inicia o scheduler IMEDIATAMENTE ao clicar Play
 
     // Lógica de Vinheta: Tenta tocar se for a primeira vez NO DIA, primeira no player ou random 30%
     const shouldPlayVignette = isFirstDailyUse || (Math.random() > 0.7 || !hasPlayedVignetteRef.current);
@@ -434,10 +435,6 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
     } else {
       if (playlist.length > 0) {
         if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
-        startScheduler();
-      } else {
-        // Se não houver música, apenas inicia o scheduler de narrações
-        startScheduler();
       }
     }
   };
@@ -446,13 +443,29 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
     const ctx = initAudioContext();
     const vignetteText = isIntro ? INTRO_VIGNETTE_TEXT : VIGNETTE_TEXT;
     
-    console.log(`[SmartPlayer] Iniciando reprodução da vinheta (${isIntro ? 'Intro' : 'CTA'})...`);
+    console.log(`[SmartPlayer] Preparando vinheta (${isIntro ? 'Intro' : 'CTA'})...`);
     setIsVignettePlaying(true);
     
+    // Timeout de segurança: Se em 10 segundos a vinheta não tocar, cancelamos
+    const timeout = setTimeout(() => {
+        if (isVignettePlayingRef.current) {
+            console.warn("[SmartPlayer] Timeout na geração da vinheta. Pulando...");
+            setIsVignettePlaying(false);
+            if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
+        }
+    }, 10000);
+
     try {
       const base64 = await generateSpeech(vignetteText, 'Kore');
       const buffer = await decodeAudioData(base64, ctx);
       
+      clearTimeout(timeout);
+      
+      if (!isPlayingRef.current) {
+          setIsVignettePlaying(false);
+          return;
+      }
+
       const source = ctx.createBufferSource();
       source.buffer = buffer;
       
@@ -468,15 +481,14 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
         setIsVignettePlaying(false);
         hasPlayedVignetteRef.current = true;
         if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
-        startScheduler();
       };
       
       source.start(0);
     } catch(e) {
       console.error("[SmartPlayer] Erro fatal na reprodução da vinheta", e);
+      clearTimeout(timeout);
       setIsVignettePlaying(false);
       if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
-      startScheduler(); // FIX: Sempre inicia o scheduler, mesmo se a vinheta falhar
     }
   };
 
@@ -1025,7 +1037,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
   return (
     <div className="max-w-6xl mx-auto w-full px-4 animate-fade-in pb-20 relative">
-        <div id="youtube-player-hidden" className="fixed top-[-9999px] left-[-9999px] opacity-0 pointer-events-none"></div>
+        <div id="youtube-player-hidden" className="fixed top-0 left-0 w-[1px] h-[1px] opacity-1 pointer-events-none z-[-1]"></div>
         <input ref={fileInputRef} type="file" accept="audio/*,.mpeg,.mpg" multiple className="hidden" onChange={handleFileSelect} />
         
         {pendingUploads.length > 0 && (
@@ -1105,7 +1117,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                              ) : <div className="text-slate-600">Sem Faixa</div>}
                              {isNarratingUI && <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm"><Mic2 size={48} className="text-cyan-400 animate-pulse" /></div>}
                         </div>
-                        <h3 className="text-xl font-bold text-white mb-1 text-center line-clamp-1 max-w-md">{currentTrack?.name || (isPlaying ? (playlist.length === 0 ? "Narração Ativa" : "Carregando...") : "Aguardando...")}</h3>
+                        <h3 className="text-xl font-bold text-white mb-1 text-center line-clamp-1 max-w-md">{isVignettePlaying ? "Iniciando Transmissão..." : (currentTrack?.name || (isPlaying ? (playlist.length === 0 ? "Narração Ativa" : "Carregando...") : "Aguardando..."))}</h3>
                         
                         <div className="flex items-center gap-6 mt-6">
                              <button onClick={() => setLoopMode(prev => prev === 'off' ? 'all' : prev === 'all' ? 'one' : 'off')} className={`p-3 rounded-full transition-all ${loopMode !== 'off' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-500 hover:text-white'}`}>
