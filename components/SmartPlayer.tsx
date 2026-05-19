@@ -118,10 +118,14 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
     loadFeedbacks();
 
     // Check for first daily use
-    const lastDate = localStorage.getItem('voxgen_last_player_use');
-    const today = new Date().toDateString();
-    if (lastDate !== today) {
-        setIsFirstDailyUse(true);
+    try {
+      const lastDate = localStorage.getItem('voxgen_last_player_use');
+      const today = new Date().toDateString();
+      if (lastDate !== today) {
+          setIsFirstDailyUse(true);
+      }
+    } catch (e) {
+      console.warn("[SmartPlayer] LocalStorage not accessible", e);
     }
   }, []);
 
@@ -383,81 +387,97 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       }
     }, [isYtReady, isPlaying, currentTrackIndex, isVignettePlaying]);
 
-  const handleMainPlay = () => {
-      const ctx = initAudioContext();
+  const handleMainPlay = async () => {
+    const ctx = initAudioContext();
 
-      if (isPlaying) {
-          setIsPlaying(false);
-          
-          if (narrationSourceNodeRef.current) {
-              try { narrationSourceNodeRef.current.stop(); } catch (e) {}
-              narrationSourceNodeRef.current = null;
-          }
-          isNarratingRef.current = false;
-          setIsNarratingUI(false);
-          
-          restoreVolume(0.1);
-
-          if (ctx.state === 'running') ctx.suspend();
-          pauseTrack();
-          stopScheduler();
-          return;
-      }
-
-      if (ctx.state === 'suspended') ctx.resume();
-
-      setIsPlaying(true);
-
-      // Lógica de Vinheta: Tenta tocar se for a primeira vez NO DIA, primeira no player ou random 30%
-      const shouldPlayVignette = isFirstDailyUse || (Math.random() > 0.7 || !hasPlayedVignetteRef.current);
+    if (isPlaying) {
+      setIsPlaying(false);
       
-      if (shouldPlayVignette) {
-          playVignette(isFirstDailyUse);
-          if (isFirstDailyUse) {
-              localStorage.setItem('voxgen_last_player_use', new Date().toDateString());
-              setIsFirstDailyUse(false);
-          }
-      } else {
-          if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
-          startScheduler();
+      if (narrationSourceNodeRef.current) {
+        try { narrationSourceNodeRef.current.stop(); } catch (e) {}
+        narrationSourceNodeRef.current = null;
       }
+      isNarratingRef.current = false;
+      setIsNarratingUI(false);
+      
+      restoreVolume(0.1);
+
+      if (ctx.state === 'running') ctx.suspend();
+      pauseTrack();
+      stopScheduler();
+      return;
+    }
+
+    if (ctx.state === 'suspended') {
+      try {
+        await ctx.resume();
+      } catch (e) {
+        console.warn("[SmartPlayer] Falha ao resumir AudioContext:", e);
+      }
+    }
+
+    setIsPlaying(true);
+
+    // Lógica de Vinheta: Tenta tocar se for a primeira vez NO DIA, primeira no player ou random 30%
+    const shouldPlayVignette = isFirstDailyUse || (Math.random() > 0.7 || !hasPlayedVignetteRef.current);
+    
+    if (shouldPlayVignette) {
+      playVignette(isFirstDailyUse);
+      if (isFirstDailyUse) {
+        try {
+          localStorage.setItem('voxgen_last_player_use', new Date().toDateString());
+          setIsFirstDailyUse(false);
+        } catch (e) {
+          console.warn("[SmartPlayer] LocalStorage setItem não suportado");
+        }
+      }
+    } else {
+      if (playlist.length > 0) {
+        if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
+        startScheduler();
+      } else {
+        // Se não houver música, apenas inicia o scheduler de narrações
+        startScheduler();
+      }
+    }
   };
 
   const playVignette = async (isIntro: boolean = false) => {
-      const ctx = initAudioContext();
-      const vignetteText = isIntro ? INTRO_VIGNETTE_TEXT : VIGNETTE_TEXT;
+    const ctx = initAudioContext();
+    const vignetteText = isIntro ? INTRO_VIGNETTE_TEXT : VIGNETTE_TEXT;
+    
+    console.log(`[SmartPlayer] Iniciando reprodução da vinheta (${isIntro ? 'Intro' : 'CTA'})...`);
+    setIsVignettePlaying(true);
+    
+    try {
+      const base64 = await generateSpeech(vignetteText, 'Kore');
+      const buffer = await decodeAudioData(base64, ctx);
       
-      console.log(`[SmartPlayer] Iniciando reprodução da vinheta (${isIntro ? 'Intro' : 'CTA'})...`);
-      setIsVignettePlaying(true);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
       
-      try {
-        const base64 = await generateSpeech(vignetteText, 'Kore');
-        const buffer = await decodeAudioData(base64, ctx);
-        
-        const source = ctx.createBufferSource();
-        source.buffer = buffer;
-        
-        // Conecta ao master bus com limiter
-        if (masterBusGainRef.current) {
-            source.connect(masterBusGainRef.current);
-        } else {
-            source.connect(ctx.destination);
-        }
-
-        source.onended = () => {
-            console.log("[SmartPlayer] Vinheta finalizada.");
-            setIsVignettePlaying(false);
-            hasPlayedVignetteRef.current = true;
-            if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
-            startScheduler();
-        };
-        
-        source.start(0);
-      } catch(e) {
-        console.error("[SmartPlayer] Erro fatal na reprodução da vinheta", e);
-        setIsVignettePlaying(false);
-        if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
+      // Conecta ao master bus com limiter
+      if (masterBusGainRef.current) {
+        source.connect(masterBusGainRef.current);
+      } else {
+        source.connect(ctx.destination);
       }
+
+      source.onended = () => {
+        console.log("[SmartPlayer] Vinheta finalizada.");
+        setIsVignettePlaying(false);
+        hasPlayedVignetteRef.current = true;
+        if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
+        startScheduler();
+      };
+      
+      source.start(0);
+    } catch(e) {
+      console.error("[SmartPlayer] Erro fatal na reprodução da vinheta", e);
+      setIsVignettePlaying(false);
+      if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
+      startScheduler(); // FIX: Sempre inicia o scheduler, mesmo se a vinheta falhar
+    }
   };
 
   const playTrack = (track: Track) => {
@@ -1045,7 +1065,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
         </div>
 
         <div className="bg-slate-800/50 border border-slate-700 rounded-3xl p-8 mb-8 relative overflow-hidden min-h-[400px] flex flex-col items-center justify-center transition-all duration-500 group">
-             <div className={`absolute inset-0 opacity-20 blur-3xl transition-colors duration-700 ${isNarratingRef.current ? 'bg-cyan-600' : 'bg-gradient-to-br from-cyan-500 to-blue-600'}`} />
+             <div className={`absolute inset-0 opacity-20 blur-3xl transition-colors duration-700 ${isNarratingUI ? 'bg-cyan-600' : 'bg-gradient-to-br from-cyan-500 to-blue-600'}`} />
              
              <div className="relative z-10 flex flex-col items-center w-full">
                  {currentTrack?.type === 'spotify' ? (
@@ -1066,7 +1086,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                                       <h3 className="text-white font-bold text-lg">Iniciar Sistema</h3>
                                  </div>
                              )}
-                             {isNarratingRef.current && (
+                             {isNarratingUI && (
                                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10"><div className="bg-black/80 backdrop-blur-md rounded-2xl p-4 flex flex-col items-center border border-cyan-500/30"><Mic2 size={32} className="text-cyan-400 animate-pulse mb-2" /><span className="text-cyan-400 font-bold text-xs">Narrando...</span></div></div>
                              )}
                          </div>
@@ -1083,15 +1103,15 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                              {currentTrack ? (
                                  currentTrack.type === 'youtube' ? <img src={currentTrack.thumbnail} className="w-full h-full object-cover" /> : <div className="bg-gradient-to-br from-slate-700 to-slate-800 w-full h-full flex items-center justify-center"><Mic2 size={64} className="text-slate-500 opacity-50" /></div>
                              ) : <div className="text-slate-600">Sem Faixa</div>}
-                             {isNarratingRef.current && <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm"><Mic2 size={48} className="text-cyan-400 animate-pulse" /></div>}
+                             {isNarratingUI && <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm"><Mic2 size={48} className="text-cyan-400 animate-pulse" /></div>}
                         </div>
-                        <h3 className="text-xl font-bold text-white mb-1 text-center line-clamp-1 max-w-md">{currentTrack?.name || (isPlaying ? "Carregando..." : "Aguardando...")}</h3>
+                        <h3 className="text-xl font-bold text-white mb-1 text-center line-clamp-1 max-w-md">{currentTrack?.name || (isPlaying ? (playlist.length === 0 ? "Narração Ativa" : "Carregando...") : "Aguardando...")}</h3>
                         
                         <div className="flex items-center gap-6 mt-6">
                              <button onClick={() => setLoopMode(prev => prev === 'off' ? 'all' : prev === 'all' ? 'one' : 'off')} className={`p-3 rounded-full transition-all ${loopMode !== 'off' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-500 hover:text-white'}`}>
                                  {loopMode === 'one' ? <Repeat1 size={18} /> : <Repeat size={18} />}
                              </button>
-                             <button onClick={handleMainPlay} disabled={playlist.length === 0} className={`w-20 h-20 rounded-full flex items-center justify-center transition-all ${isPlaying ? 'bg-cyan-500 text-black shadow-lg scale-105' : 'bg-slate-700 text-white hover:bg-slate-600'}`}>
+                             <button onClick={handleMainPlay} className={`w-20 h-20 rounded-full flex items-center justify-center transition-all ${isPlaying ? 'bg-cyan-500 text-black shadow-lg scale-105' : 'bg-slate-700 text-white hover:bg-slate-600'}`}>
                                  {isPlaying ? <Pause size={32} fill="black" /> : <Play size={32} fill="white" className="ml-2" />}
                              </button>
                              <button onClick={handleNextTrack} className="p-4 rounded-full bg-slate-800 text-slate-400 hover:text-white"><SkipForward size={24} /></button>

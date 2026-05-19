@@ -24,6 +24,13 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail }) => {
 
   useEffect(() => {
     refreshStatus();
+    const timer = setTimeout(() => {
+      if (!status) {
+          console.warn('[DEBUG] Home status taking too long, using defaults');
+          setStatus({ plan: 'free', narrationsToday: 0 });
+      }
+    }, 4000);
+    return () => clearTimeout(timer);
   }, [userEmail]);
 
   const refreshStatus = async () => {
