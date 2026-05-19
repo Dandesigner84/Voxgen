@@ -12,6 +12,25 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onCommand }) => {
   const [lastTranscript, setLastTranscript] = useState('');
   const recognitionRef = useRef<any>(null);
 
+  function processTranscript(transcript: string) {
+    setLastTranscript(transcript);
+    
+    if (!transcript.includes('voxgen')) return;
+
+    setIsActivated(true);
+    setTimeout(() => setIsActivated(false), 1500);
+
+    if (transcript.includes('tocar') || transcript.includes('play') || transcript.includes('reproduzir')) {
+       onCommand('play');
+    } else if (transcript.includes('pausar') || transcript.includes('parar') || transcript.includes('pause')) {
+       onCommand('pause');
+    } else if (transcript.includes('abaixar') || transcript.includes('baixo') || transcript.includes('diminuir')) {
+       onCommand('volume_down');
+    } else if (transcript.includes('aumentar') || transcript.includes('alto')) {
+       onCommand('volume_up');
+    }
+  }
+
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     
@@ -58,24 +77,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onCommand }) => {
     };
   }, []);
 
-  const processTranscript = (transcript: string) => {
-    setLastTranscript(transcript);
-    
-    if (!transcript.includes('voxgen')) return;
 
-    setIsActivated(true);
-    setTimeout(() => setIsActivated(false), 1500);
-
-    if (transcript.includes('tocar') || transcript.includes('play') || transcript.includes('reproduzir')) {
-      onCommand('play');
-    } else if (transcript.includes('pausar') || transcript.includes('parar') || transcript.includes('pause')) {
-      onCommand('pause');
-    } else if (transcript.includes('abaixar') || transcript.includes('baixo') || transcript.includes('diminuir')) {
-      onCommand('volume_down');
-    } else if (transcript.includes('aumentar') || transcript.includes('alto')) {
-      onCommand('volume_up');
-    }
-  };
 
   return (
     <div className="fixed bottom-24 right-6 z-[100] flex flex-col items-end gap-3 pointer-events-none">

@@ -22,14 +22,17 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail }) => {
   const isCorpTeam = userRole === 'corporate-user';
   const isAdmin = userRole === 'admin';
 
-  useEffect(() => {
-    refreshStatus();
-  }, [userEmail]);
-
   const refreshStatus = async () => {
     const s = await getUserStatus(userEmail);
     setStatus(s);
   };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      refreshStatus();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [userEmail]);
 
   const handleRedeem = async () => {
     if (!code.trim()) return;

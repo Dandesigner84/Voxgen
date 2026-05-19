@@ -48,21 +48,30 @@ const PDFAudioModule: React.FC<PDFModuleProps> = () => {
     };
   }, []);
 
-  // Sync YouTube Video ID
-  useEffect(() => {
-    if (youtubeUrl) {
-      const id = extractYoutubeId(youtubeUrl);
-      setVideoId(id);
-    } else {
-      setVideoId(null);
-    }
-  }, [youtubeUrl]);
-
   const extractYoutubeId = (url: string) => {
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
     const match = url.match(regExp);
     return (match && match[2].length === 11) ? match[2] : null;
   };
+
+  // Sync YouTube Video ID
+  useEffect(() => {
+    let active = true;
+    const timer = setTimeout(() => {
+      if (active) {
+        if (youtubeUrl) {
+          const id = extractYoutubeId(youtubeUrl);
+          setVideoId(id);
+        } else {
+          setVideoId(null);
+        }
+      }
+    }, 0);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [youtubeUrl]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -117,69 +126,9 @@ const PDFAudioModule: React.FC<PDFModuleProps> = () => {
     }
   };
 
-  // Countdown timer logic
-  useEffect(() => {
-    if (countdown === null) return;
-    
-    if (countdown > 0) {
-      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-      return () => clearTimeout(timer);
-    } else if (countdown === 0) {
-      handleStartPlayback();
-      setCountdown(null);
-    }
-  }, [countdown]);
-
   const renderPdf = (url: string) => {
     // Para simplificar a renderização visual, usaremos um embed ou iframe
     // mas o texto já foi extraído pelo pdf.js para o áudio
-  };
-
-  const handleStartPlayback = async () => {
-    if (extractedText.length === 0) return;
-    
-    let textToRead = extractedText.join(' ');
-    
-    // Se o modo resumo estiver ativo, processamos o texto primeiro
-    if (useSummary) {
-      setIsSummarizing(true);
-      setError(null);
-      try {
-        textToRead = await summarizeText(textToRead);
-      } catch (err) {
-        console.error("Falha ao resumir:", err);
-      } finally {
-        setIsSummarizing(false);
-      }
-    }
-
-    // Split into smaller parts, but ensure we don't have empty sentences and handle long ones
-    let sentences = textToRead.match(/[^\.!\?]+[\.!\?]+/g) || [textToRead];
-    
-    // Safety check: ensure sentences aren't extremely long (over 1000 chars) as it can crash the API
-    sentences = sentences.flatMap(s => {
-      if (s.length < 1000) return [s];
-      const subParts: string[] = [];
-      let current = s;
-      while (current.length > 0) {
-        subParts.push(current.substring(0, 1000));
-        current = current.substring(1000);
-      }
-      return subParts;
-    }).filter(s => s.trim().length > 0);
-
-    if (sentences.length === 0) return;
-    currentSentencesRef.current = sentences;
-    
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-    }
-    
-    if (audioContextRef.current.state === 'suspended') {
-      await audioContextRef.current.resume();
-    }
-
-    playRealisticSentence(0);
   };
 
   const playRealisticSentence = async (index: number) => {
@@ -225,7 +174,9 @@ const PDFAudioModule: React.FC<PDFModuleProps> = () => {
       
       source.onended = () => {
         if (isPlaying && !isPaused) {
-          playRealisticSentence(index + 1);
+          playRealisticSentence(index + 1).catch(err => {
+            console.error("Recursive call error:", err);
+          });
         }
       };
       
@@ -238,6 +189,70 @@ const PDFAudioModule: React.FC<PDFModuleProps> = () => {
       setError(`Erro na narração: ${errorMessage}. Verifique se sua chave API está correta ou tente um trecho menor.`);
     }
   };
+
+  const handleStartPlayback = async () => {
+    if (extractedText.length === 0) return;
+    
+    let textToRead = extractedText.join(' ');
+    
+    // Se o modo resumo estiver ativo, processamos o texto primeiro
+    if (useSummary) {
+      setIsSummarizing(true);
+      setError(null);
+      try {
+        textToRead = await summarizeText(textToRead);
+      } catch (err) {
+        console.error("Falha ao resumir:", err);
+      } finally {
+        setIsSummarizing(false);
+      }
+    }
+
+    // Split into smaller parts, but ensure we don't have empty sentences and handle long ones
+    let sentences = textToRead.match(/[^.!?]+[.!?]+/g) || [textToRead];
+    
+    // Safety check: ensure sentences aren't extremely long (over 1000 chars) as it can crash the API
+    sentences = sentences.flatMap(s => {
+      if (s.length < 1000) return [s];
+      const subParts: string[] = [];
+      let current = s;
+      while (current.length > 0) {
+        subParts.push(current.substring(0, 1000));
+        current = current.substring(1000);
+      }
+      return subParts;
+    }).filter(s => s.trim().length > 0);
+
+    if (sentences.length === 0) return;
+    currentSentencesRef.current = sentences;
+    
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    
+    if (audioContextRef.current.state === 'suspended') {
+      await audioContextRef.current.resume();
+    }
+
+    playRealisticSentence(0);
+  };
+
+  // Countdown timer logic
+  useEffect(() => {
+    if (countdown === null) return;
+    
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    } else if (countdown === 0) {
+      const timer = setTimeout(() => {
+        handleStartPlayback();
+        setCountdown(null);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countdown]);
 
   const handlePause = () => {
     if (audioContextRef.current) {

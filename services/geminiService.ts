@@ -163,13 +163,13 @@ const callTTS = async (textChunk: string, voiceName: string, isCustom: boolean):
             }
             return window.btoa(binary);
         } catch (e: any) {
-            throw new Error(`Erro OpenAI: ${e.message}`);
+            throw new Error(`Erro OpenAI: ${e.message}`, { cause: e });
         }
     }
 
     const ai = getClient();
     const MAX_RETRIES = 5;
-    let effectiveVoice = voiceName.split('-')[0];
+    const effectiveVoice = voiceName.split('-')[0];
     
     // Safety mapping for Gemini Prebuilt Voices
     const validGeminiVoices = ['Puck', 'Charon', 'Kore', 'Fenrir', 'Aoede'];
@@ -225,7 +225,7 @@ const callTTS = async (textChunk: string, voiceName: string, isCustom: boolean):
             console.warn(`[Gemini TTS] Attempt ${attempt} failed: ${e.message}. Retrying in ${backoffTime}ms...`);
             await wait(backoffTime);
             
-            if (attempt === MAX_RETRIES) throw new Error(`Gemini API Quota/Error: ${e.message || "Unknown error"}`);
+            if (attempt === MAX_RETRIES) throw new Error(`Gemini API Quota/Error: ${e.message || "Unknown error"}`, { cause: e });
         }
     }
     throw new Error("Falha ao chamar API Gemini após múltiplas tentativas.");
@@ -292,7 +292,7 @@ export const generateSpeech = async (rawText: string, voice: string): Promise<st
     }
   } catch (e: any) {
     console.error("[Gemini Service] Critical Speech Gen Error:", e);
-    throw new Error(e.message || "Falha ao gerar narração. Verifique sua conexão e limites.");
+    throw new Error(e.message || "Falha ao gerar narração. Verifique sua conexão e limites.", { cause: e });
   }
 };
 

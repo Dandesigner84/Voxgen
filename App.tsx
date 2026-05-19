@@ -34,16 +34,46 @@ const AppContent: React.FC = () => {
   const [authLoading, setAuthLoading] = useState(true);
   const [mode, setMode] = useState<AppMode>(AppMode.Home);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const lastModeChangeTimeRef = useRef<number>(Date.now());
+  const lastModeChangeTimeRef = useRef<number>(0);
   const activeModeRef = useRef<AppMode>(AppMode.Home);
+
+  const [selectedVoice, setSelectedVoice] = useState<VoiceName | string>(VoiceName.Kore);
+  const [text, setText] = useState(DEFAULT_TEXT);
+  const [selectedTone, setSelectedTone] = useState<ToneType | string>(ToneType.Neutral);
+  const [useMusic, setUseMusic] = useState(false);
+  const [history, setHistory] = useState<AudioItem[]>([]);
+  const [processing, setProcessing] = useState<ProcessingState>({
+    isEnhancing: false, isGeneratingAudio: false, error: null,
+  });
+
+  const [suggestedText, setSuggestedText] = useState<string | null>(null);
+  const [isAddingSFX, setIsAddingSFX] = useState(false);
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const [globalGain, setGlobalGain] = useState(1.0);
   
+  const previewSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
+  const masterGainNodeRef = useRef<GainNode | null>(null);
+
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstallable, setIsInstallable] = useState(false);
+
+  // Initialize pure ref safe on mount
+  useEffect(() => {
+    lastModeChangeTimeRef.current = Date.now();
+  }, []);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         // Start tracking session if not already started
         if (!sessionId) {
+          try {
             const sid = await startSession(firebaseUser.uid);
             setSessionId(sid);
+          } catch (sessionErr) {
+            console.error('[Analytics] Failed to start session:', sessionErr);
+          }
         }
 
         // Define initial basic user info from Auth
@@ -80,8 +110,8 @@ const AppContent: React.FC = () => {
                 }
 
                 // Load History
-                if (audioContextRef.current) {
-                  const savedHistory = await getUserNarrations(firebaseUser.uid, audioContextRef.current);
+                if (audioContext) {
+                  const savedHistory = await getUserNarrations(firebaseUser.uid, audioContext);
                   setHistory(savedHistory);
                 } else {
                    const tempCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -121,28 +151,7 @@ const AppContent: React.FC = () => {
     });
 
     return () => unsubscribe();
-  }, []);
-
-  const [selectedVoice, setSelectedVoice] = useState<VoiceName | string>(VoiceName.Kore);
-  const [text, setText] = useState(DEFAULT_TEXT);
-  const [selectedTone, setSelectedTone] = useState<ToneType | string>(ToneType.Neutral);
-  const [useMusic, setUseMusic] = useState(false);
-  const [history, setHistory] = useState<AudioItem[]>([]);
-  const [processing, setProcessing] = useState<ProcessingState>({
-    isEnhancing: false, isGeneratingAudio: false, error: null,
-  });
-
-  const [suggestedText, setSuggestedText] = useState<string | null>(null);
-  const [isAddingSFX, setIsAddingSFX] = useState(false);
-  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
-  const [globalGain, setGlobalGain] = useState(1.0);
-  
-  const previewSourceRef = useRef<AudioBufferSourceNode | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const masterGainNodeRef = useRef<GainNode | null>(null);
-
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [isInstallable, setIsInstallable] = useState(false);
+  }, [authLoading, audioContext, sessionId]);
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {
@@ -208,24 +217,27 @@ const AppContent: React.FC = () => {
   };
 
   const initAudioContext = (): AudioContext => {
-    if (!audioContextRef.current) {
+    let ctx = audioContext;
+    if (!ctx) {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      const ctx = new AudioContextClass({ sampleRate: 24000 });
+      ctx = new AudioContextClass({ sampleRate: 24000 });
       
       const masterGain = ctx.createGain();
       masterGain.gain.value = globalGain;
       masterGain.connect(ctx.destination);
       
-      audioContextRef.current = ctx;
+      setAudioContext(ctx);
       masterGainNodeRef.current = masterGain;
     }
-    if (audioContextRef.current.state === 'suspended') audioContextRef.current.resume();
-    return audioContextRef.current;
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
   };
 
   const stopPreview = () => {
     if (previewSourceRef.current) {
-      try { previewSourceRef.current.stop(); } catch (e) {}
+      try { previewSourceRef.current.stop(); } catch (e) {
+        // Ignored
+      }
       previewSourceRef.current = null;
     }
     setIsPlayingPreview(false);
@@ -264,28 +276,32 @@ const AppContent: React.FC = () => {
     console.log(`[VoxGen Voice] Executando comando: ${command}`);
     
     switch (command) {
-        case 'play':
+        case 'play': {
             if (mode === AppMode.Narration && text.trim()) {
                 handlePreviewNarration();
             } else if (mode === AppMode.SmartPlayer) {
                 window.dispatchEvent(new CustomEvent('voxgen-play'));
             }
             break;
-        case 'pause':
+        }
+        case 'pause': {
             stopPreview();
             window.dispatchEvent(new CustomEvent('voxgen-pause'));
-            if (audioContextRef.current) audioContextRef.current.suspend();
+            if (audioContext) audioContext.suspend();
             break;
-        case 'volume_down':
+        }
+        case 'volume_down': {
             const newVolDown = Math.max(0, globalGain - 0.3);
             setGlobalGain(newVolDown);
-            if (masterGainNodeRef.current) masterGainNodeRef.current.gain.setTargetAtTime(newVolDown, audioContextRef.current!.currentTime, 0.2);
+            if (masterGainNodeRef.current && audioContext) masterGainNodeRef.current.gain.setTargetAtTime(newVolDown, audioContext.currentTime, 0.2);
             break;
-        case 'volume_up':
+        }
+        case 'volume_up': {
             const newVolUp = Math.min(1.5, globalGain + 0.3);
             setGlobalGain(newVolUp);
-            if (masterGainNodeRef.current) masterGainNodeRef.current.gain.setTargetAtTime(newVolUp, audioContextRef.current!.currentTime, 0.2);
+            if (masterGainNodeRef.current && audioContext) masterGainNodeRef.current.gain.setTargetAtTime(newVolUp, audioContext.currentTime, 0.2);
             break;
+        }
     }
   };
 
@@ -437,7 +453,7 @@ const AppContent: React.FC = () => {
       <main className="flex-grow py-8">
          <div className={mode === AppMode.SmartPlayer ? 'block' : 'hidden'}>
             <SmartPlayer 
-                audioContext={audioContextRef.current} 
+                audioContext={audioContext} 
                 initAudioContext={initAudioContext} 
                 narrationHistory={history} 
                 userRole={user.role} 
@@ -467,17 +483,17 @@ const AppContent: React.FC = () => {
                     </div>
                     <div className="lg:col-span-5">
                         <div className="bg-slate-900/50 rounded-2xl p-4 border border-slate-800 h-[500px] overflow-y-auto custom-scrollbar">
-                            <AudioList items={history} audioContext={audioContextRef.current} />
+                            <AudioList items={history} audioContext={audioContext} />
                         </div>
                     </div>
                 </div>
             </div>
          )}
-         {mode === AppMode.Music && <MusicStudio audioContext={audioContextRef.current} initAudioContext={initAudioContext} />}
-         {mode === AppMode.Avatar && <AvatarStudio audioContext={audioContextRef.current} initAudioContext={initAudioContext} narrationHistory={history} />}
-         {mode === AppMode.Manga && <MangaStudio audioContext={audioContextRef.current} initAudioContext={initAudioContext} />}
-         {mode === AppMode.SFX && <SFXStudio audioContext={audioContextRef.current} initAudioContext={initAudioContext} />}
-         {mode === AppMode.VoiceCloning && <VoiceCloningStudio audioContext={audioContextRef.current} initAudioContext={initAudioContext} userEmail={user.email} />}
+         {mode === AppMode.Music && <MusicStudio audioContext={audioContext} initAudioContext={initAudioContext} />}
+         {mode === AppMode.Avatar && <AvatarStudio audioContext={audioContext} initAudioContext={initAudioContext} narrationHistory={history} />}
+         {mode === AppMode.Manga && <MangaStudio audioContext={audioContext} initAudioContext={initAudioContext} />}
+         {mode === AppMode.SFX && <SFXStudio audioContext={audioContext} initAudioContext={initAudioContext} />}
+         {mode === AppMode.VoiceCloning && <VoiceCloningStudio audioContext={audioContext} initAudioContext={initAudioContext} userEmail={user.email} />}
          {mode === AppMode.PDFAudio && <PDFAudioModule />}
       </main>
       

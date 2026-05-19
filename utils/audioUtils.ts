@@ -1,6 +1,8 @@
 
 import { ToneType } from "../types";
 
+declare const lamejs: any;
+
 /**
  * Decodes a base64 string into a raw byte array.
  */
@@ -202,14 +204,12 @@ export function audioBufferToWav(buffer: AudioBuffer): Blob {
  * Export audio buffer to MP3 blob using lamejs
  */
 export function audioBufferToMp3(buffer: AudioBuffer): Blob {
-  // @ts-ignore
   if (typeof lamejs === 'undefined') {
     throw new Error('A biblioteca lamejs não foi carregada corretamente.');
   }
 
   const numOfChan = buffer.numberOfChannels;
   const sampleRate = buffer.sampleRate;
-  // @ts-ignore
   const mp3encoder = new lamejs.Mp3Encoder(numOfChan, sampleRate, 128);
   const mp3Data: Uint8Array[] = [];
 
@@ -309,7 +309,7 @@ export async function addBackgroundMusic(
   voiceSource.start(0);
 
   const musicGain = offlineCtx.createGain();
-  let bgVolume = 0.2; 
+  const bgVolume = 0.2; 
   musicGain.connect(offlineCtx.destination);
 
   await generateProceduralLayers(offlineCtx, musicGain, tone, duration);

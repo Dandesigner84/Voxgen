@@ -88,10 +88,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ userRole = 'admin', userEmail }
   const [daysToGen, setDaysToGen] = useState(30);
   const [copied, setCopied] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadData();
-  }, [activeTab]);
-
   const loadData = async () => {
     setLoading(true);
     try {
@@ -134,6 +130,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ userRole = 'admin', userEmail }
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadData();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [activeTab]);
 
   const handleUpdatePlan = async (uid: string, currentPlan: string) => {
     const newPlan = currentPlan === 'free' ? 'premium' : 'free';

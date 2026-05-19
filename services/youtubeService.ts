@@ -44,6 +44,6 @@ export const buscarYouTube = async (query: string): Promise<YouTubeSearchResult[
         if (error.message === 'INVALID_API_KEY' || error.message === 'LIMIT_EXCEEDED' || error.message === 'API_KEY_MISSING') {
             throw error;
         }
-        throw new Error('NETWORK_ERROR');
+        throw new Error('NETWORK_ERROR', { cause: error });
     }
 };

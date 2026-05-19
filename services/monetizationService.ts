@@ -159,7 +159,7 @@ export const incrementUsage = async (): Promise<number> => {
     const userDoc = await getDoc(doc(db, path));
     const userData = userDoc.exists() ? userDoc.data() : { narrationsToday: 0, lastUsageDate: '' };
     
-    let currentCount = userData.lastUsageDate === today ? (userData.narrationsToday || 0) : 0;
+    const currentCount = userData.lastUsageDate === today ? (userData.narrationsToday || 0) : 0;
     const newCount = currentCount + 1;
 
     await setDoc(doc(db, path), {
