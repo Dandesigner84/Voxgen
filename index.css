@@ -2,11 +2,22 @@
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-primary: #009739;
+  --color-primary-dark: #007a2d;
+  --color-secondary: #FFDF00;
+  --color-secondary-dark: #ccb000;
+  --color-accent-blue: #002776;
+  --color-stadium-green: #03150b;
 }
 
 body {
   font-family: var(--font-sans);
-  background-color: #060b14;
+  background-color: #03150b; 
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(0, 151, 57, 0.15) 0%, transparent 65%),
+    radial-gradient(circle at 100% 50%, rgba(255, 223, 0, 0.05) 0%, transparent 45%),
+    radial-gradient(circle at 0% 100%, rgba(0, 39, 118, 0.1) 0%, transparent 50%);
+  background-attachment: fixed;
   color: #f8fafc;
   overscroll-behavior-y: none;
   overflow-x: hidden;
@@ -18,11 +29,14 @@ body {
   height: 8px;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: #0f172a; 
+  background: #020f08; 
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #334155; 
+  background: #00973950; 
   border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #FFDF0080; 
 }
 
 @keyframes fade-in {
@@ -32,4 +46,22 @@ body {
 
 .animate-fade-in {
   animation: fade-in 0.6s ease-out forwards;
+}
+
+/* World Cup animations */
+@keyframes stadium-pulse {
+  0%, 100% { opacity: 0.12; }
+  50% { opacity: 0.25; }
+}
+
+.animate-stadium-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 500px;
+  background: radial-gradient(ellipse at 50% 0%, rgba(255,223,0,0.1) 0%, rgba(0,151,57,0.05) 40%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+  animation: stadium-pulse 8s infinite ease-in-out;
 }

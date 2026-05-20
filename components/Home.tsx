@@ -52,91 +52,110 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail }) => {
   return (
     <div className="flex flex-col items-center justify-center min-h-[80vh] w-full animate-fade-in px-4 py-8">
       
+      {/* Banner da Copa do Mundo */}
+      <div className="w-full max-w-4xl rounded-3xl overflow-hidden border border-[#FFDF00]/30 shadow-[0_0_35px_rgba(0,151,57,0.15)] mb-10 relative group bg-[#020d06]">
+          <div className="absolute inset-0 bg-gradient-to-t from-[#020f08] via-[#020f08]/20 to-transparent z-10" />
+          <img 
+            src="/src/assets/images/voxgen_copa_banner_1779318696684.png" 
+            alt="Copa do Mundo VoxGen" 
+            className="w-full h-48 sm:h-56 md:h-64 object-cover group-hover:scale-103 transition-transform duration-700 opacity-90"
+            referrerPolicy="no-referrer"
+          />
+          <div className="absolute bottom-4 left-6 z-20">
+              <span className="bg-[#FFDF00] text-[#002776] px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg flex items-center gap-1 w-max">
+                 <span className="animate-bounce">⚽</span> EDIÇÃO COPA DO MUNDO
+              </span>
+              <h2 className="text-xl md:text-3xl font-black text-white mt-1.5 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">Oficina de Voz do Hexa! 🇧🇷</h2>
+              <p className="text-slate-100 text-xs md:text-sm drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] opacity-95 mt-0.5 font-medium">Solte o grito de gol e refine suas locuções com a inteligência canarinho.</p>
+          </div>
+      </div>
+
       <div className="w-full max-w-4xl flex flex-col md:flex-row justify-between items-center mb-12 gap-6">
         <div className="text-center md:text-left">
             <div className="flex flex-col md:flex-row md:items-end gap-3 mb-2">
-                <h1 className="text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-400 tracking-tight">
+                <h1 className="text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#009739] via-[#FFDF00] to-sky-400 tracking-tight drop-shadow-[0_4px_12px_rgba(0,151,57,0.25)]">
                 VoxGen AI
                 </h1>
                 <button 
                   onClick={() => setIsFeedbackOpen(true)}
-                  className="flex items-center justify-center gap-2 text-amber-400 bg-amber-400/10 border border-amber-400/20 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-amber-400 hover:text-black transition-all mb-2 md:mb-1 self-center md:self-auto"
+                  className="flex items-center justify-center gap-2 text-[#FFDF00] bg-[#FFDF00]/10 border border-[#FFDF00]/35 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-[#FFDF00] hover:text-[#002776] hover:scale-105 transition-all mb-2 md:mb-1 self-center md:self-auto shadow-md"
                 >
-                  <Star size={12} fill="currentColor" /> Avaliar VoxGen
+                  <Star size={12} fill="currentColor" /> Avaliar VoxGen 🏆
                 </button>
             </div>
-            <p className="text-slate-400 text-lg mt-2 font-medium">
-            Sua oficina de som completa com Inteligência Artificial.
+            <p className="text-emerald-400 text-lg mt-2 font-bold tracking-wide">
+            Sua oficina tática de som completa com Inteligência Artificial.
             </p>
             
             {userRole === 'admin' && (
-                <button onClick={() => onSelectMode(AppMode.Admin)} className="mt-4 inline-flex items-center gap-2 bg-indigo-600/20 border border-indigo-500/50 text-indigo-300 px-4 py-2 rounded-full text-sm font-bold hover:bg-indigo-600 hover:text-white transition-all">
-                    <ShieldCheck size={16} /> Painel Administrativo
+                <button onClick={() => onSelectMode(AppMode.Admin)} className="mt-4 inline-flex items-center gap-2 bg-[#009739]/20 border border-[#FFDF00]/40 text-[#FFDF00] px-4 py-2 rounded-full text-sm font-black hover:bg-[#009739] hover:text-white transition-all shadow-[0_0_15px_rgba(0,151,57,0.2)]">
+                    <ShieldCheck size={16} className="text-[#FFDF00]" /> Painel Administrativo do Técnico
                 </button>
             )}
 
             <div className="mt-6 flex flex-wrap gap-4">
                 <button 
                     onClick={() => alert("Módulo de Equipe em breve!")} 
-                    className="group flex items-center gap-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-3 rounded-2xl font-bold hover:shadow-[0_0_20px_rgba(16,185,129,0.4)] transition-all hover:-translate-y-1 active:scale-95"
+                    className="group flex items-center gap-3 bg-[#009739] hover:bg-[#007a2d] border border-[#FFDF00]/30 text-white px-6 py-3 rounded-2xl font-black hover:shadow-[0_0_20px_rgba(0,151,57,0.4)] transition-all hover:-translate-y-1 active:scale-95 shadow-md"
                 >
                     <div className="bg-white/20 p-1.5 rounded-lg group-hover:rotate-12 transition-transform">
                         <Users size={20} />
                     </div>
                     <div className="text-left">
-                        <div className="text-[10px] opacity-80 uppercase tracking-widest leading-none mb-1">Corporate</div>
+                        <div className="text-[10px] text-[#FFDF00] font-black uppercase tracking-widest leading-none mb-1">Corporate</div>
                         <div className="text-sm">Cadastrar Equipe</div>
                     </div>
                 </button>
                 
                 <button 
                     onClick={() => alert("Upgrade para Plano Ilimitado em breve!")} 
-                    className="group flex items-center gap-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white px-6 py-3 rounded-2xl font-bold hover:shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all hover:-translate-y-1 active:scale-95"
+                    className="group flex items-center gap-3 bg-[#002776] hover:bg-[#001746] border border-[#FFDF00]/40 text-[#FFDF00] px-6 py-3 rounded-2xl font-black hover:shadow-[0_0_20px_rgba(0,39,118,0.5)] transition-all hover:-translate-y-1 active:scale-95 shadow-md"
                 >
-                    <div className="bg-white/20 p-1.5 rounded-lg group-hover:rotate-12 transition-transform">
-                        <Sparkles size={20} />
+                    <div className="bg-white/10 p-1.5 rounded-lg group-hover:rotate-12 transition-transform">
+                        <Sparkles size={20} className="text-[#FFDF00]" />
                     </div>
                     <div className="text-left">
-                        <div className="text-[10px] opacity-80 uppercase tracking-widest leading-none mb-1">VIP Access</div>
-                        <div className="text-sm">Cadastro Premium</div>
+                        <div className="text-[10px] text-white font-bold uppercase tracking-widest leading-none mb-1">VIP Access</div>
+                        <div className="text-sm">Escalação Premium</div>
                     </div>
                 </button>
             </div>
         </div>
 
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 min-w-[300px] backdrop-blur-sm shadow-xl">
+        <div className="bg-[#020f08]/92 border border-[#009739]/40 rounded-2xl p-5 min-w-[310px] backdrop-blur-md shadow-[0_4px_30px_rgba(0,151,57,0.15)] relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-tr from-transparent to-[#FFDF00]/10 rounded-full blur-xl pointer-events-none" />
             <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                     {status.plan === 'premium' ? (
-                        <Crown size={20} className="text-yellow-400 fill-yellow-400" />
+                        <Crown size={20} className="text-[#FFDF00] fill-[#FFDF00]" />
                     ) : (
-                        <Star size={20} className="text-slate-500" />
+                        <Star size={20} className="text-[#009739]" />
                     )}
-                    <span className={`font-bold ${status.plan === 'premium' ? 'text-yellow-400' : 'text-slate-300'}`}>
-                        {status.plan === 'premium' ? 'PLANO PREMIUM' : 'PLANO FREE'}
+                    <span className={`font-black uppercase tracking-wider text-sm ${status.plan === 'premium' ? 'text-[#FFDF00]' : 'text-emerald-400'}`}>
+                        {status.plan === 'premium' ? '🏆 TITULAR COPA' : '🥈 RESERVA DE LUXO'}
                     </span>
                 </div>
             </div>
             
             {status.plan === 'premium' ? (
-                <div className="text-xs text-slate-400">
-                    Acesso ilimitado até <span className="text-white font-bold">{getFormatExpiryDate(status.expiryDate)}</span>
+                <div className="text-xs text-[#FFDF00] font-black bg-[#009739]/15 p-2.5 rounded-lg border border-[#009739]/30">
+                    Acesso ilimitado até: <span className="text-white font-black">{getFormatExpiryDate(status.expiryDate)}</span>
                 </div>
             ) : (
-                <div className="text-xs text-slate-400 mb-2">
-                    Uso hoje: <span className="text-white font-bold">{status.narrationsToday}/3</span> narrações
+                <div className="text-xs text-slate-300 mb-2">
+                    Gols de hoje: <span className="text-[#FFDF00] font-extrabold">{status.narrationsToday}/3</span> locuções
                 </div>
             )}
 
             {!isCorpTeam && (
-                <div className="mt-3 flex gap-2">
-                    <input type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="INSERIR CÓDIGO" className="bg-slate-950 border border-slate-700 rounded px-3 py-2 text-xs text-white outline-none focus:border-indigo-500 flex-grow uppercase" />
-                    <button onClick={handleRedeem} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded text-xs font-bold transition-colors">
+                <div className="mt-4 flex gap-2">
+                    <input type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="INSERIR INGRESSO" className="bg-[#010905] border border-emerald-900 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-[#FFDF00] flex-grow uppercase font-semibold transition-colors" />
+                    <button onClick={handleRedeem} className="bg-[#FFDF00] hover:bg-[#ccb000] text-[#002776] px-4 py-2 rounded-lg text-xs font-black transition-colors shadow-sm">
                         RESGATAR
                     </button>
                 </div>
             )}
-            {redeemMsg && <p className={`text-[10px] mt-2 ${redeemMsg.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>{redeemMsg.text}</p>}
+            {redeemMsg && <p className={`text-[10px] mt-2 font-bold ${redeemMsg.type === 'success' ? 'text-emerald-400' : 'text-rose-400'}`}>{redeemMsg.text}</p>}
         </div>
       </div>
       
@@ -147,159 +166,159 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl w-full">
         <button 
           onClick={() => (isAdmin || userRole === 'corporate-admin') ? onSelectMode(AppMode.Narration) : alert("Módulo em construção para usuários VIP.")} 
-          className={`group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${(userRole === 'user' || userRole === 'corporate-user') && !isAdmin ? 'cursor-not-allowed opacity-80' : 'hover:border-indigo-500/50'}`}
+          className={`group relative overflow-hidden rounded-3xl border border-[#009739]/30 bg-[#020f08]/60 hover:bg-[#020f08]/90 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${(userRole === 'user' || userRole === 'corporate-user') && !isAdmin ? 'cursor-not-allowed opacity-85' : 'hover:border-[#FFDF00]/60 hover:shadow-[0_0_25px_rgba(0,151,57,0.15)]'}`}
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="absolute inset-0 bg-gradient-to-br from-[#009739]/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           {(userRole === 'user' || userRole === 'corporate-user') && !isAdmin && (
-            <div className="absolute top-4 right-4 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-bold z-10">
-              EM CONSTRUÇÃO
+            <div className="absolute top-4 right-4 bg-[#FFDF00]/20 text-[#FFDF00] border border-[#FFDF00]/30 px-3 py-1 rounded-full text-[9px] font-black tracking-widest z-10 uppercase">
+              RESERVA
             </div>
           )}
-          <div className="w-16 h-16 bg-indigo-500/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-            <Mic size={32} className="text-indigo-400" />
+          <div className="w-16 h-16 bg-[#009739]/25 rounded-2xl flex items-center justify-center mb-6 border border-[#009739]/30 group-hover:scale-110 group-hover:bg-[#FFDF00]/20 group-hover:border-[#FFDF00]/40 transition-all">
+            <Mic size={32} className="text-[#FFDF00]" />
           </div>
-          <h2 className="text-xl font-bold text-white mb-2">Narração</h2>
+          <h2 className="text-xl font-black text-white mb-2 flex items-center gap-1.5">Narração Canarinho 🇧🇷</h2>
           {(isAdmin || userRole === 'corporate-admin') ? (
-            <p className="text-slate-400 text-xs">Transforme textos em voz humana com alta fidelidade.</p>
+            <p className="text-slate-300 text-xs font-semibold">Gere locuções profissionais e vibrantes com IA com toda a energia da Copa.</p>
           ) : (
-            <p className="text-amber-500/70 text-xs font-medium italic">Módulo em construção. Disponível em breve para usuários comuns.</p>
+            <p className="text-[#FFDF00] text-xs font-bold italic">Disponível em breve para escalação de usuários comuns.</p>
           )}
         </button>
 
         {!isCorpTeam && (
             <button 
               onClick={() => isAdmin ? onSelectMode(AppMode.Music) : alert("Módulo em construção para usuários VIP.")} 
-              className={`group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${!isAdmin ? 'cursor-not-allowed opacity-80' : 'hover:border-purple-500/50'}`}
+              className={`group relative overflow-hidden rounded-3xl border border-[#009739]/30 bg-[#020f08]/60 hover:bg-[#020f08]/90 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${!isAdmin ? 'cursor-not-allowed opacity-85' : 'hover:border-[#FFDF00]/60 hover:shadow-[0_0_25px_rgba(0,151,57,0.15)]'}`}
             >
-            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="absolute inset-0 bg-gradient-to-br from-sky-500/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             {!isAdmin && (
-              <div className="absolute top-4 right-4 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-bold z-10">
-                EM CONSTRUÇÃO
+              <div className="absolute top-4 right-4 bg-[#FFDF00]/20 text-[#FFDF00] border border-[#FFDF00]/30 px-3 py-1 rounded-full text-[9px] font-black tracking-widest z-10 uppercase">
+                RESERVA
               </div>
             )}
-            <div className="w-16 h-16 bg-purple-500/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                <Music size={32} className="text-purple-400" />
+            <div className="w-16 h-16 bg-sky-500/20 rounded-2xl flex items-center justify-center mb-6 border border-sky-500/30 group-hover:scale-110 group-hover:bg-[#FFDF00]/20 group-hover:border-[#FFDF00]/40 transition-all">
+                <Music size={32} className="text-sky-300 group-hover:text-[#FFDF00]" />
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">Música</h2>
+            <h2 className="text-xl font-black text-white mb-2 flex items-center gap-1.5">Estúdio de Hinos 🏆</h2>
             {isAdmin ? (
-              <p className="text-slate-400 text-xs">Crie trilhas e músicas completas a partir de descrições.</p>
+              <p className="text-slate-300 text-xs font-semibold">Crie trilhas épicas e hinos do hexa com descrições simples de IA.</p>
             ) : (
-              <p className="text-amber-500/70 text-xs font-medium italic">Módulo em construção. Disponível em breve para usuários comuns.</p>
+              <p className="text-[#FFDF00] text-xs font-bold italic">Disponível em breve para escalação de usuários comuns.</p>
             )}
             </button>
         )}
 
         <button 
           onClick={() => isAdmin ? onSelectMode(AppMode.VoiceCloning) : alert("Módulo em construção para usuários VIP.")} 
-          className={`group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${!isAdmin ? 'cursor-not-allowed opacity-80' : 'hover:border-cyan-500/50'}`}
+          className={`group relative overflow-hidden rounded-3xl border border-[#009739]/30 bg-[#020f08]/60 hover:bg-[#020f08]/90 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${!isAdmin ? 'cursor-not-allowed opacity-85' : 'hover:border-[#FFDF00]/60 hover:shadow-[0_0_25px_rgba(0,151,57,0.15)]'}`}
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="absolute inset-0 bg-gradient-to-br from-[#002776]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           {!isAdmin && (
-            <div className="absolute top-4 right-4 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-bold z-10">
-              EM CONSTRUÇÃO
+            <div className="absolute top-4 right-4 bg-[#FFDF00]/20 text-[#FFDF00] border border-[#FFDF00]/30 px-3 py-1 rounded-full text-[9px] font-black tracking-widest z-10 uppercase">
+              RESERVA
             </div>
           )}
-          <div className="w-16 h-16 bg-cyan-500/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-            <Mic2 size={32} className="text-cyan-400" />
+          <div className="w-16 h-16 bg-[#002776]/30 rounded-2xl flex items-center justify-center mb-6 border border-[#002776]/40 group-hover:scale-110 group-hover:bg-[#FFDF00]/20 group-hover:border-[#FFDF00]/40 transition-all">
+            <Mic2 size={32} className="text-[#002776] fill-[#FFDF00]" />
           </div>
-          <h2 className="text-xl font-bold text-white mb-2">Clone de Voz</h2>
+          <h2 className="text-xl font-black text-white mb-2">Clone de Grito 🎤</h2>
           {isAdmin ? (
-            <p className="text-slate-400 text-xs">Grave sua voz e crie um narrador digital personalizado.</p>
+            <p className="text-slate-300 text-xs font-semibold">Clone sua voz para gritar gol e narrar jogadas com fidelidade absoluta.</p>
           ) : (
-            <p className="text-amber-500/70 text-xs font-medium italic">Módulo em construção. Disponível em breve para usuários comuns.</p>
+            <p className="text-[#FFDF00] text-xs font-bold italic">Disponível em breve para escalação de usuários comuns.</p>
           )}
         </button>
 
-        <button onClick={() => onSelectMode(AppMode.SmartPlayer)} className="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 hover:border-emerald-500/50 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl">
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-            <Radio size={32} className="text-emerald-400" />
+        <button onClick={() => onSelectMode(AppMode.SmartPlayer)} className="group relative overflow-hidden rounded-3xl border border-[#009739]/40 bg-[#020f08]/80 hover:bg-[#020f08] border-[#FFDF00]/30 hover:border-[#FFDF00]/65 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl shadow-[0_0_15px_rgba(0,151,57,0.1)]">
+          <div className="absolute inset-0 bg-gradient-to-br from-[#009739]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="w-16 h-16 bg-[#009739]/30 rounded-2xl flex items-center justify-center mb-6 border border-[#009739]/40 group-hover:scale-110 transition-transform">
+            <Radio size={32} className="text-[#FFDF00]" />
           </div>
-          <h2 className="text-xl font-bold text-white mb-2">Smart Player</h2>
-          <p className="text-slate-400 text-xs">Rádio inteligente com anúncios e músicas automatizadas.</p>
+          <h2 className="text-xl font-black text-white mb-2">Rádio Craque 📻</h2>
+          <p className="text-slate-300 text-xs font-semibold">Rádio inteligente com anúncios táticos, hinos e músicas automatizadas.</p>
         </button>
 
         <button 
           onClick={() => isAdmin ? onSelectMode(AppMode.Avatar) : null} 
-          className={`group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${!isAdmin ? 'cursor-not-allowed opacity-80' : 'hover:border-pink-500/50'}`}
+          className={`group relative overflow-hidden rounded-3xl border border-[#009739]/30 bg-[#020f08]/60 hover:bg-[#020f08]/90 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${!isAdmin ? 'cursor-not-allowed opacity-85' : 'hover:border-[#FFDF00]/60 hover:shadow-[0_0_25px_rgba(0,151,57,0.15)]'}`}
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-pink-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="absolute inset-0 bg-gradient-to-br from-[#FFDF00]/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           {!isAdmin && (
-            <div className="absolute top-4 right-4 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-bold z-10">
-              EM CONSTRUÇÃO
+            <div className="absolute top-4 right-4 bg-[#FFDF00]/20 text-[#FFDF00] border border-[#FFDF00]/30 px-3 py-1 rounded-full text-[9px] font-black tracking-widest z-10 uppercase">
+              RESERVA
             </div>
           )}
-          <div className="w-16 h-16 bg-pink-500/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-            <Crown size={32} className="text-pink-400" />
+          <div className="w-16 h-16 bg-[#FFDF00]/15 rounded-2xl flex items-center justify-center mb-6 border border-[#FFDF00]/35 group-hover:scale-110 group-hover:bg-[#FFDF00]/20 transition-all">
+            <Crown size={32} className="text-[#FFDF00]" />
           </div>
-          <h2 className="text-xl font-bold text-white mb-2">Avatar Digital</h2>
+          <h2 className="text-xl font-black text-white mb-2">Avatar do Hexa ⚽</h2>
           {isAdmin ? (
-            <p className="text-slate-400 text-xs">Crie avatares falantes realistas a partir das suas narrações.</p>
+            <p className="text-slate-300 text-xs font-semibold">Crie avatares falantes realistas de torcedores ou comentaristas.</p>
           ) : (
-            <p className="text-amber-500/70 text-xs font-medium italic">Módulo em construção. Disponível em breve para usuários comuns.</p>
+            <p className="text-[#FFDF00] text-xs font-bold italic">Disponível em breve para escalação de usuários comuns.</p>
           )}
         </button>
 
         <button 
           onClick={() => isAdmin ? onSelectMode(AppMode.SFX) : null} 
-          className={`group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${!isAdmin ? 'cursor-not-allowed opacity-80' : 'hover:border-orange-500/50'}`}
+          className={`group relative overflow-hidden rounded-3xl border border-[#009739]/30 bg-[#020f08]/60 hover:bg-[#020f08]/90 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${!isAdmin ? 'cursor-not-allowed opacity-85' : 'hover:border-[#FFDF00]/60 hover:shadow-[0_0_25px_rgba(0,151,57,0.15)]'}`}
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-500/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           {!isAdmin && (
-            <div className="absolute top-4 right-4 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-bold z-10">
-              EM CONSTRUÇÃO
+            <div className="absolute top-4 right-4 bg-[#FFDF00]/20 text-[#FFDF00] border border-[#FFDF00]/30 px-3 py-1 rounded-full text-[9px] font-black tracking-widest z-10 uppercase">
+              RESERVA
             </div>
           )}
-          <div className="w-16 h-16 bg-orange-500/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-            <Volume2 size={32} className="text-orange-400" />
+          <div className="w-16 h-16 bg-amber-500/20 rounded-2xl flex items-center justify-center mb-6 border border-amber-500/30 group-hover:scale-110 transition-transform">
+            <Volume2 size={32} className="text-emerald-400 group-hover:text-[#FFDF00]" />
           </div>
-          <h2 className="text-xl font-bold text-white mb-2">Efeitos Sonoros</h2>
+          <h2 className="text-xl font-black text-white mb-2">Efeitos de Estádio 🏟️</h2>
           {isAdmin ? (
-            <p className="text-slate-400 text-xs">Gere sons ambientais e efeitos especiais para seus vídeos.</p>
+            <p className="text-slate-300 text-xs font-semibold">Gere gritos de torcidas, vuvuzelas e apitos de alta fidelidade.</p>
           ) : (
-            <p className="text-amber-500/70 text-xs font-medium italic">Módulo em construção. Disponível em breve para usuários comuns.</p>
+            <p className="text-[#FFDF00] text-xs font-bold italic">Disponível em breve para escalação de usuários comuns.</p>
           )}
         </button>
 
         <button 
           onClick={() => isAdmin ? onSelectMode(AppMode.Manga) : null} 
-          className={`group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${!isAdmin ? 'cursor-not-allowed opacity-80' : 'hover:border-yellow-500/50'}`}
+          className={`group relative overflow-hidden rounded-3xl border border-[#009739]/30 bg-[#020f08]/60 hover:bg-[#020f08]/90 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${!isAdmin ? 'cursor-not-allowed opacity-85' : 'hover:border-[#FFDF00]/60 hover:shadow-[0_0_25px_rgba(0,151,57,0.15)]'}`}
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="absolute inset-0 bg-gradient-to-br from-[#FFDF00]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           {!isAdmin && (
-            <div className="absolute top-4 right-4 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-bold z-10">
-              EM CONSTRUÇÃO
+            <div className="absolute top-4 right-4 bg-[#FFDF00]/20 text-[#FFDF00] border border-[#FFDF00]/30 px-3 py-1 rounded-full text-[9px] font-black tracking-widest z-10 uppercase">
+              RESERVA
             </div>
           )}
-          <div className="w-16 h-16 bg-yellow-500/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-            <Sparkles size={32} className="text-yellow-400" />
+          <div className="w-16 h-16 bg-[#009739]/25 rounded-2xl flex items-center justify-center mb-6 border border-[#009739]/35 group-hover:scale-110 group-hover:bg-[#FFDF00]/20 transition-all">
+            <Sparkles size={32} className="text-[#FFDF00]" />
           </div>
-          <h2 className="text-xl font-bold text-white mb-2">Manga Studio</h2>
+          <h2 className="text-xl font-black text-white mb-2">Gibis Narrados 📖</h2>
           {isAdmin ? (
-            <p className="text-slate-400 text-xs">Transforme histórias em quadrinhos dinâmicos com áudio.</p>
+            <p className="text-slate-300 text-xs font-semibold">Crie quadrinhos dinâmicos com as principais glórias da seleção canarinha.</p>
           ) : (
-            <p className="text-amber-500/70 text-xs font-medium italic">Módulo em construção. Disponível em breve para usuários comuns.</p>
+            <p className="text-[#FFDF00] text-xs font-bold italic">Disponível em breve para escalação de usuários comuns.</p>
           )}
         </button>
 
         <button 
           onClick={() => isAdmin ? onSelectMode(AppMode.PDFAudio) : null} 
-          className={`group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${!isAdmin ? 'cursor-not-allowed opacity-80' : 'hover:border-rose-500/50'}`}
+          className={`group relative overflow-hidden rounded-3xl border border-[#009739]/30 bg-[#020f08]/60 hover:bg-[#020f08]/90 transition-all duration-300 h-80 flex flex-col items-center justify-center text-center p-6 shadow-xl ${!isAdmin ? 'cursor-not-allowed opacity-85' : 'hover:border-[#FFDF00]/60 hover:shadow-[0_0_25px_rgba(0,151,57,0.15)]'}`}
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-rose-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="absolute inset-0 bg-gradient-to-br from-rose-500/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           {!isAdmin && (
-            <div className="absolute top-4 right-4 bg-amber-500/10 text-amber-500 border border-amber-500/20 px-3 py-1 rounded-full text-[10px] font-bold z-10">
-              EM CONSTRUÇÃO
+            <div className="absolute top-4 right-4 bg-[#FFDF00]/20 text-[#FFDF00] border border-[#FFDF00]/30 px-3 py-1 rounded-full text-[9px] font-black tracking-widest z-10 uppercase">
+              RESERVA
             </div>
           )}
-          <div className="w-16 h-16 bg-rose-500/20 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-            <BookOpen size={32} className="text-rose-400" />
+          <div className="w-16 h-16 bg-rose-500/20 rounded-2xl flex items-center justify-center mb-6 border border-rose-500/35 group-hover:scale-110 transition-transform">
+            <BookOpen size={32} className="text-rose-400 group-hover:text-[#FFDF00]" />
           </div>
-          <h2 className="text-xl font-bold text-white mb-2">PDF Imersivo</h2>
+          <h2 className="text-xl font-black text-white mb-2">Táticas Imersivas 📃</h2>
           {isAdmin ? (
-            <p className="text-slate-400 text-xs">Leitura de PDF em voz alta com fundo de vídeo YouTube.</p>
+            <p className="text-slate-300 text-xs font-semibold">Leitura de PDF em voz alta com fundo de vídeos do YouTube e estádios.</p>
           ) : (
-            <p className="text-amber-500/70 text-xs font-medium italic">Módulo em construção. Disponível em breve para usuários comuns.</p>
+            <p className="text-[#FFDF00] text-xs font-bold italic">Disponível em breve para escalação de usuários comuns.</p>
           )}
         </button>
       </div>
