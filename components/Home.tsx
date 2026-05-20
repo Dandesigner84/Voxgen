@@ -56,7 +56,7 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail }) => {
       <div className="w-full max-w-4xl rounded-3xl overflow-hidden border border-[#FFDF00]/30 shadow-[0_0_35px_rgba(0,151,57,0.15)] mb-10 relative group bg-[#020d06]">
           <div className="absolute inset-0 bg-gradient-to-t from-[#020f08] via-[#020f08]/20 to-transparent z-10" />
           <img 
-            src="/src/assets/images/voxgen_copa_banner_1779318696684.png" 
+            src="/voxgen_copa_banner_1779318696684.png" 
             alt="Copa do Mundo VoxGen" 
             className="w-full h-48 sm:h-56 md:h-64 object-cover group-hover:scale-103 transition-transform duration-700 opacity-90"
             referrerPolicy="no-referrer"
