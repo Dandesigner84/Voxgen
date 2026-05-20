@@ -9,8 +9,16 @@ const STORAGE_KEYS = {
 };
 
 const getClient = () => {
-  const rawKey = process.env.GEMINI_API_KEY || "";
+  let rawKey = process.env.GEMINI_API_KEY || "";
   
+  if (!rawKey || rawKey === "undefined" || rawKey === "null") {
+    try {
+      rawKey = (import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_API_KEY || "") as string;
+    } catch (e) {
+      // Ignora erro fora de ambientes ESM/Vite
+    }
+  }
+
   if (!rawKey || rawKey === "undefined" || rawKey === "null") {
       console.warn("[Gemini] API Key is missing or invalid. Verify your environment variables.");
   }
