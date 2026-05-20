@@ -9,9 +9,14 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   // Suporte flexível para múltiplos nomes de chaves no deploy (Vercel)
   const apiKey = env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || env.API_KEY || env.VITE_API_KEY || env.GOOGLE_API_KEY || env.VITE_GOOGLE_API_KEY || '';
+  const openaiKey = env.OPENAI_API_KEY || env.VITE_OPENAI_API_KEY || '';
+  const webhookUrl = env.VITE_REGISTRATION_WEBHOOK_URL || env.REGISTRATION_WEBHOOK_URL || '';
+
   return {
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(apiKey),
+      'process.env.OPENAI_API_KEY': JSON.stringify(openaiKey),
+      'process.env.VITE_REGISTRATION_WEBHOOK_URL': JSON.stringify(webhookUrl),
     },
     plugins: [
       react(),
