@@ -236,7 +236,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
           setIsPlaying(false);
           
           if (narrationSourceNodeRef.current) {
-              try { narrationSourceNodeRef.current.stop(); } catch (e) {}
+              try { narrationSourceNodeRef.current.stop(); } catch (e) { void e; }
               narrationSourceNodeRef.current = null;
           }
           isNarratingRef.current = false;

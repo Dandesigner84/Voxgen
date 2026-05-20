@@ -57,6 +57,7 @@ const AppContent: React.FC = () => {
 
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallable, setIsInstallable] = useState(false);
+  const hasLoadedHistoryRef = useRef(false);
 
   // Initialize pure ref safe on mount
   useEffect(() => {
@@ -110,14 +111,11 @@ const AppContent: React.FC = () => {
                 }
 
                 // Load History
-                if (audioContext) {
-                  const savedHistory = await getUserNarrations(firebaseUser.uid, audioContext);
-                  setHistory(savedHistory);
-                } else {
-                   const tempCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-                   const savedHistory = await getUserNarrations(firebaseUser.uid, tempCtx);
-                   setHistory(savedHistory);
-                   tempCtx.close();
+                if (!hasLoadedHistoryRef.current) {
+                    const ctx = initAudioContext();
+                    const savedHistory = await getUserNarrations(firebaseUser.uid, ctx);
+                    setHistory(savedHistory);
+                    hasLoadedHistoryRef.current = true;
                 }
             } else {
                 // Create user doc if missing
@@ -216,7 +214,7 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const initAudioContext = (): AudioContext => {
+  function initAudioContext(): AudioContext {
     let ctx = audioContext;
     if (!ctx) {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -231,7 +229,7 @@ const AppContent: React.FC = () => {
     }
     if (ctx.state === 'suspended') ctx.resume();
     return ctx;
-  };
+  }
 
   const stopPreview = () => {
     if (previewSourceRef.current) {
