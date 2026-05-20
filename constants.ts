@@ -59,4 +59,4 @@ export const DEFAULT_TEXT = "Olá! Eu sou a VoxGen AI. Como posso ajudar com sua
 
 export const CALIBRATION_TEXT = "Ao registrar minha voz neste estúdio de inteligência artificial, declaro que estou ciente de que as amostras coletadas serão utilizadas exclusivamente para o treinamento de modelos de síntese de voz personalizados.";
 
-export const VIGNETTE_TEXT = "Você está ouvindo a programação inteligente alimentada pela VoxGen AI. Para anúncios e parcerias, entre em contato pelo WhatsApp: 1 1, 9 2 1 9 2, 9 2 4 3.";
+export const VIGNETTE_TEXT = "Você está ouvindo a programação inteligente alimentada pela VoxGen AI. Para anúncios e parcerias, entre em contato pelo WhatsApp: 11, 9, 21, 92, 92, 43.";
