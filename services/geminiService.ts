@@ -9,7 +9,10 @@ const STORAGE_KEYS = {
 };
 
 const getClient = () => {
-  let rawKey = process.env.GEMINI_API_KEY || "";
+  let rawKey = "";
+  try {
+    rawKey = process.env.GEMINI_API_KEY || "";
+  } catch (e) {}
   
   if (!rawKey || rawKey === "undefined" || rawKey === "null") {
     try {
@@ -19,11 +22,12 @@ const getClient = () => {
     }
   }
 
-  if (!rawKey || rawKey === "undefined" || rawKey === "null") {
-      console.warn("[Gemini] API Key is missing or invalid. Verify your environment variables.");
+  const cleanKey = rawKey ? rawKey.replace(/["'\s]/g, "") : ""; 
+  
+  if (!cleanKey || cleanKey === "undefined" || cleanKey === "null" || cleanKey === "GEMINI_API_KEY" || cleanKey === "VITE_GEMINI_API_KEY" || cleanKey === "VITE_API_KEY") {
+    throw new Error("Sua chave de API do Gemini não está configurada ou é inválida no Vercel. Verifique as variáveis de ambiente do seu projeto no menu do Vercel e refaça o Deploy para que o Vite compile a chave!");
   }
   
-  const cleanKey = rawKey.replace(/["'\s]/g, ""); 
   return new GoogleGenAI({ apiKey: cleanKey });
 };
 

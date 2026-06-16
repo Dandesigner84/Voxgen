@@ -7,7 +7,8 @@ import {
   Phone, 
   ChevronRight,
   ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  Mic
 } from 'lucide-react';
 import { UserRole } from '../types';
 import { auth, db } from '../services/firebase';
@@ -155,21 +156,23 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#03150b] p-4 font-sans relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-[#0b0f19] p-4 font-sans relative overflow-hidden">
       <div className="animate-stadium-glow pointer-events-none" />
-      <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-[#009739]/20 rounded-full blur-[128px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-[#FFDF00]/10 rounded-full blur-[128px] pointer-events-none" />
+      <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-indigo-600/20 rounded-full blur-[128px] pointer-events-none" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-cyan-600/10 rounded-full blur-[128px] pointer-events-none" />
 
       <div id="recaptcha-container"></div>
 
-      <div className="w-full max-w-md bg-[#020f08]/92 border border-[#009739]/40 backdrop-blur-xl rounded-3xl shadow-[0_0_50px_rgba(0,151,57,0.15)] p-8 relative z-10 animate-fade-in">
+      <div className="w-full max-w-md bg-slate-900/90 border border-indigo-500/25 backdrop-blur-xl rounded-3xl shadow-[0_0_50px_rgba(99,102,241,0.15)] p-8 relative z-10 animate-fade-in">
         
-        <div className="text-center mb-10">
-          <div className="w-14 h-14 bg-gradient-to-br from-[#009739] to-[#FFDF00] rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg"><span className="text-2xl animate-bounce">⚽</span></div>
-          <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#009739] via-[#FFDF00] to-sky-400 tracking-tight mb-1">
-            VoxGen Brasil 🏆
+         <div className="text-center mb-10">
+          <div className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-cyan-400 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+             <Mic size={26} className="text-white" />
+          </div>
+          <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-400 tracking-tight mb-1">
+            VoxGen AI
           </h1>
-          <p className="text-emerald-400 text-xs font-black uppercase tracking-widest leading-none mt-2">Edição Tática Copa do Mundo 2026</p>
+          <p className="text-indigo-400 text-xs font-black uppercase tracking-widest leading-none mt-2">Sua oficina de áudio inteligente</p>
         </div>
 
         {step === 'method_select' && (
@@ -180,7 +183,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               className="w-full group font-bold py-4 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-3 border bg-white hover:bg-slate-50 text-slate-900 border-slate-200"
             >
               {loading ? (
-                <Loader2 className="animate-spin text-emerald-600" />
+                <Loader2 className="animate-spin text-indigo-600" />
               ) : (
                 <>
                   <svg className="w-5 h-5 group-hover:scale-110 transition-transform" viewBox="0 0 24 24">
@@ -197,9 +200,9 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <button 
               onClick={() => setStep('phone_entry')}
               disabled={loading}
-              className="w-full group font-black uppercase tracking-wider text-xs py-4 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-3 bg-[#009739] hover:bg-[#007a2d] hover:text-[#FFDF00] text-white border border-[#FFDF00]/30 shadow-[0_4px_15px_rgba(0,151,57,0.3)]"
+              className="w-full group font-black uppercase tracking-wider text-xs py-4 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-3 bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500/30 shadow-[0_4px_15px_rgba(99,102,241,0.3)]"
             >
-              <Phone size={20} className="group-hover:scale-110 transition-transform text-[#FFDF00]" />
+              <Phone size={20} className="group-hover:scale-110 transition-transform text-white" />
               Login com Telefone
             </button>
           </div>

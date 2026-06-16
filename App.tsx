@@ -382,13 +382,13 @@ const AppContent: React.FC = () => {
 
   if (authLoading) {
     return (
-        <div className="min-h-screen bg-[#03150b] flex flex-col items-center justify-center gap-4 relative overflow-hidden">
+        <div className="min-h-screen bg-[#0b0f19] flex flex-col items-center justify-center gap-4 relative overflow-hidden">
             <div className="animate-stadium-glow pointer-events-none" />
             <div className="relative">
-              <Loader2 className="w-12 h-12 text-[#FFDF00] animate-spin" />
-              <div className="absolute inset-0 flex items-center justify-center animate-bounce text-sm">⚽</div>
+              <Loader2 className="w-12 h-12 text-[#6366f1] animate-spin" />
+              <div className="absolute inset-0 flex items-center justify-center text-xs">✨</div>
             </div>
-            <p className="text-sm font-black text-[#FFDF00] uppercase tracking-widest animate-pulse">Aquecendo para a Copa VoxGen...</p>
+            <p className="text-sm font-black text-indigo-400 uppercase tracking-widest animate-pulse">Iniciando VoxGen AI...</p>
         </div>
     );
   }
@@ -412,46 +412,46 @@ const AppContent: React.FC = () => {
       <VoiceAssistant onCommand={handleVoiceCommand} />
       
       {suggestedText && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-fade-in">
-              <div className="bg-[#03190f] border border-[#FFDF00]/40 rounded-2xl p-6 max-w-4xl w-full shadow-[0_0_50px_rgba(0,151,57,0.2)]">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in">
+              <div className="bg-[#0f172a] border border-indigo-500/40 rounded-2xl p-6 max-w-4xl w-full shadow-[0_0_50px_rgba(99,102,241,0.25)]">
                   <div className="text-center mb-6">
-                      <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-3"><Sparkles size={24} className="text-[#FFDF00]" /></div>
-                      <h2 className="text-xl md:text-2xl font-black text-white mb-2 flex items-center justify-center gap-2"><span>🇧🇷</span> Narração Humanizada</h2>
-                      <p className="text-slate-300 text-sm">A inteligência tática do VoxGen aprimorou seu roteiro!</p>
+                      <div className="w-12 h-12 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-3"><Sparkles size={24} className="text-indigo-400" /></div>
+                      <h2 className="text-xl md:text-2xl font-black text-white mb-2 flex items-center justify-center gap-2">Narração Humanizada</h2>
+                      <p className="text-slate-400 text-sm">A inteligência artificial do VoxGen refinou o seu roteiro!</p>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                      <div className="bg-[#010905] rounded-xl p-4 border border-emerald-900">
+                      <div className="bg-slate-950 rounded-xl p-4 border border-slate-800">
                           <h4 className="text-slate-400 font-bold text-xs uppercase mb-3 flex items-center gap-2">Original</h4>
                           <div className="text-sm text-slate-300 h-48 overflow-y-auto custom-scrollbar p-2 bg-slate-900/50 rounded whitespace-pre-wrap">{text}</div>
                           <button onClick={() => setSuggestedText(null)} className="mt-4 w-full py-3 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 font-bold text-sm flex items-center justify-center gap-2"><XCircle size={16} /> Manter Original</button>
                       </div>
-                      <div className="bg-[#009739]/10 rounded-xl p-4 border border-[#FFDF00]/30 animate-pulse-slow">
-                          <h4 className="text-[#FFDF00] font-bold text-xs uppercase mb-3 flex items-center gap-2"><span>🏆</span> Toque de Craque (Sugerido)</h4>
-                          <div className="text-sm text-white h-48 overflow-y-auto custom-scrollbar p-2 bg-emerald-950/40 rounded whitespace-pre-wrap border border-[#009739]/30">{suggestedText}</div>
-                          <button onClick={confirmSuggestion} className="mt-4 w-full py-3 rounded-lg bg-[#009739] hover:bg-[#007a2d] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(0,151,57,0.4)] transition-all hover:scale-[1.02]"><CheckCircle size={16} /> Escalado! (Usar Sugestão)</button>
+                      <div className="bg-indigo-950/10 rounded-xl p-4 border border-indigo-500/30">
+                          <h4 className="text-indigo-400 font-bold text-xs uppercase mb-3 flex items-center gap-2">✨ Versão Sugerida</h4>
+                          <div className="text-sm text-white h-48 overflow-y-auto custom-scrollbar p-2 bg-slate-900/40 rounded whitespace-pre-wrap border border-indigo-500/20">{suggestedText}</div>
+                          <button onClick={confirmSuggestion} className="mt-4 w-full py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(99,102,241,0.4)] transition-all hover:scale-[1.02]"><CheckCircle size={16} /> Aplicar Sugestão</button>
                       </div>
                   </div>
               </div>
           </div>
       )}
 
-      <header className="bg-[#020d06]/85 backdrop-blur-lg sticky top-0 z-50 p-4 border-b border-[#009739]/30 flex justify-between items-center shadow-[0_4px_24px_rgba(0,151,57,0.08)]">
+      <header className="bg-slate-900/80 backdrop-blur-lg sticky top-0 z-50 p-4 border-b border-indigo-500/20 flex justify-between items-center shadow-[0_4px_24px_rgba(0,0,0,0.4)]">
           <div onClick={() => setMode(AppMode.Home)} className="flex items-center gap-3 cursor-pointer group">
-              <div className="w-9 h-9 bg-gradient-to-br from-[#009739] to-[#FFDF00] rounded-xl flex items-center justify-center shadow-[0_0_12px_rgba(0,151,57,0.4)] group-hover:rotate-6 transition-transform"><Mic size={18} className="text-[#002776] stroke-[3]" /></div>
+              <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-cyan-400 rounded-xl flex items-center justify-center shadow-[0_0_12px_rgba(99,102,241,0.4)] group-hover:rotate-6 transition-transform"><Mic size={18} className="text-white stroke-[2]" /></div>
               <div className="flex flex-col">
-                  <h1 className="font-extrabold text-[#f1f5f9] text-base md:text-lg tracking-wide flex items-center gap-1.5 leading-none group-hover:text-white">VoxGen <span className="text-[#FFDF00] font-black">Brasil 🏆</span></h1>
-                  <span className="text-[9px] text-[#009739] font-black uppercase tracking-wider leading-none mt-1">Copa do Mundo SELEÇÃO 🇧🇷</span>
+                  <h1 className="font-extrabold text-[#f1f5f9] text-base md:text-lg tracking-wide flex items-center gap-1.5 leading-none group-hover:text-white">VoxGen <span className="text-indigo-400 font-black">AI</span></h1>
+                  <span className="text-[9px] text-cyan-400 font-black uppercase tracking-wider leading-none mt-1">Sua oficina de áudio inteligente</span>
               </div>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={() => setMode(AppMode.Home)} className="bg-[#009739] hover:bg-[#007a2d] text-white hover:text-[#FFDF00] border border-[#FFDF00]/30 px-4 py-1.5 rounded-full text-xs font-black transition-all shadow-[0_0_15px_rgba(0,151,57,0.3)] hover:shadow-[0_0_20px_rgba(255,223,0,0.4)] uppercase tracking-wider flex items-center gap-1">
-               <span>⚽</span> CADASTRO
+            <button onClick={() => setMode(AppMode.Home)} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded-full text-xs font-bold transition-all shadow-[0_0_15px_rgba(99,102,241,0.3)] hover:shadow-[0_0_20px_rgba(6,182,212,0.4)] uppercase tracking-wider flex items-center gap-1">
+               CADASTRO
             </button>
-            <div className="h-4 w-[1px] bg-emerald-800 mx-1"></div>
+            <div className="h-4 w-[1px] bg-slate-800 mx-1"></div>
             {isInstallable && (
-                <button onClick={handleInstallClick} className="bg-emerald-900/30 border border-emerald-800 hover:bg-emerald-900/50 px-3 py-1.5 rounded-full text-xs flex items-center gap-2 text-emerald-400 transition-colors"><Smartphone size={14}/> <span className="hidden sm:inline">Instalar App</span></button>
+                <button onClick={handleInstallClick} className="bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 rounded-full text-xs flex items-center gap-2 text-indigo-300 transition-colors"><Smartphone size={14}/> <span className="hidden sm:inline">Instalar App</span></button>
             )}
-            <div className="h-4 w-[1px] bg-emerald-800 mx-1"></div>
+            <div className="h-4 w-[1px] bg-slate-800 mx-1"></div>
             {mode !== AppMode.Home && (
                 <button onClick={() => setMode(AppMode.Home)} className="text-slate-400 hover:text-white text-sm flex items-center gap-1 transition-colors"><ArrowLeft size={16}/> Voltar</button>
             )}
@@ -506,9 +506,9 @@ const AppContent: React.FC = () => {
          {mode === AppMode.PDFAudio && <PDFAudioModule />}
       </main>
       
-      <footer className="p-6 text-center text-slate-400 text-xs border-t border-[#009739]/30 bg-[#020d06]/92 mt-auto">
-         <p className="flex items-center justify-center gap-1">Desenvolvido com 💚💛💙 por <span className="text-[#FFDF00] font-extrabold">Daniel de Oliveira</span></p>
-         <p className="opacity-70 mt-1 uppercase tracking-widest text-[9px] text-[#009739] font-black">VoxGen AI • Edição Especial Copa do Mundo • Powered by Google Gemini</p>
+      <footer className="p-6 text-center text-slate-400 text-xs border-t border-slate-800/80 bg-slate-950 mt-auto">
+         <p className="flex items-center justify-center gap-1">Desenvolvido com ❤️ por <span className="text-indigo-400 font-extrabold">Daniel de Oliveira</span></p>
+         <p className="opacity-70 mt-1 uppercase tracking-widest text-[9px] text-slate-500 font-semibold">VoxGen AI • Powered by Google Gemini</p>
       </footer>
     </div>
   );
