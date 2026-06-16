@@ -185,7 +185,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
             }
 
             ytPlayerRef.current = new window.YT.Player('youtube-player-hidden', {
-                height: '64', width: '64', // Pequeno mas não invisível para evitar bloqueios
+                height: '100%', width: '100%', // Preenche o wrapper responsivo
                 playerVars: { 
                     'autoplay': 1, 
                     'controls': 0, 
@@ -1025,7 +1025,25 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
   return (
     <div className="max-w-6xl mx-auto w-full px-4 animate-fade-in pb-20 relative">
-        <div id="youtube-player-hidden" className="fixed top-[-9999px] left-[-9999px] opacity-0 pointer-events-none"></div>
+        <div 
+            style={{
+                position: 'fixed',
+                bottom: '24px',
+                right: '24px',
+                width: currentTrack?.type === 'youtube' && isPlaying ? '200px' : '1px',
+                height: currentTrack?.type === 'youtube' && isPlaying ? '120px' : '1px',
+                opacity: currentTrack?.type === 'youtube' && isPlaying ? '1' : '0.01',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                border: currentTrack?.type === 'youtube' && isPlaying ? '2px solid rgba(99, 102, 241, 0.5)' : 'none',
+                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)',
+                zIndex: 50,
+                transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                pointerEvents: currentTrack?.type === 'youtube' && isPlaying ? 'auto' : 'none',
+            }}
+        >
+            <div id="youtube-player-hidden" className="w-full h-full"></div>
+        </div>
         <input ref={fileInputRef} type="file" accept="audio/*,.mpeg,.mpg" multiple className="hidden" onChange={handleFileSelect} />
         
         {pendingUploads.length > 0 && (
