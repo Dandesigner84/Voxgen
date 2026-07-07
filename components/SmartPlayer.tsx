@@ -83,7 +83,9 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
   const [highlightedFeedbacks, setHighlightedFeedbacks] = useState<UserFeedback[]>([]);
   const [currentFeedbackIndex, setCurrentFeedbackIndex] = useState(0);
   
+  const [isBackgroundPlayEnabled, setIsBackgroundPlayEnabled] = useState(true);
   const audioElRef = useRef<HTMLAudioElement | null>(null);
+  const narrationAudioElRef = useRef<HTMLAudioElement | null>(null);
   const ytPlayerRef = useRef<any>(null);
   const trackGainNodeRef = useRef<GainNode | null>(null); // Renamed from gainNodeRef for clarity
   const masterBusGainRef = useRef<GainNode | null>(null);
@@ -267,6 +269,34 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       }
   }
 
+  const playVignetteWebAudio = (ctx: AudioContext) => {
+      if (!vignetteBufferRef.current) return;
+      const source = ctx.createBufferSource();
+      source.buffer = vignetteBufferRef.current;
+      
+      if (masterBusGainRef.current) {
+          source.connect(masterBusGainRef.current);
+      } else {
+          source.connect(ctx.destination);
+      }
+
+      source.onended = () => {
+          console.log("[SmartPlayer] Vinheta finalizada.");
+          setIsVignettePlaying(false);
+          hasPlayedVignetteRef.current = true;
+          if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
+          startScheduler();
+      };
+      
+      try {
+        source.start(0);
+      } catch(e) {
+        console.error("[SmartPlayer] Erro fatal na reprodução da vinheta", e);
+        setIsVignettePlaying(false);
+        if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
+      }
+  };
+
   async function playVignette() {
       const ctx = initAudioContext();
       
@@ -288,30 +318,42 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       console.log("[SmartPlayer] Iniciando reprodução da vinheta...");
       setIsVignettePlaying(true);
       
-      const source = ctx.createBufferSource();
-      source.buffer = vignetteBufferRef.current;
-      
-      // Conecta ao master bus com limiter
-      if (masterBusGainRef.current) {
-          source.connect(masterBusGainRef.current);
+      if (isBackgroundPlayEnabled) {
+          if (narrationAudioElRef.current && vignetteBufferRef.current) {
+              try {
+                  const blob = audioBufferToWav(vignetteBufferRef.current);
+                  const url = URL.createObjectURL(blob);
+                  
+                  narrationAudioElRef.current.src = url;
+                  narrationAudioElRef.current.onended = () => {
+                      console.log("[SmartPlayer] Vinheta em segundo plano finalizada.");
+                      setIsVignettePlaying(false);
+                      hasPlayedVignetteRef.current = true;
+                      if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
+                      startScheduler();
+                      URL.revokeObjectURL(url);
+                  };
+                  narrationAudioElRef.current.onerror = () => {
+                      setIsVignettePlaying(false);
+                      if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
+                      URL.revokeObjectURL(url);
+                  };
+                  narrationAudioElRef.current.play().catch(e => {
+                      console.error("Vignette direct play error:", e);
+                      setIsVignettePlaying(false);
+                      if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
+                      URL.revokeObjectURL(url);
+                  });
+              } catch (e) {
+                  console.error("Failed to convert vignette buffer", e);
+                  playVignetteWebAudio(ctx);
+              }
+          } else {
+              setIsVignettePlaying(false);
+              if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
+          }
       } else {
-          source.connect(ctx.destination);
-      }
-
-      source.onended = () => {
-          console.log("[SmartPlayer] Vinheta finalizada.");
-          setIsVignettePlaying(false);
-          hasPlayedVignetteRef.current = true;
-          if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
-          startScheduler();
-      };
-      
-      try {
-        source.start(0);
-      } catch(e) {
-        console.error("[SmartPlayer] Erro fatal na reprodução da vinheta", e);
-        setIsVignettePlaying(false);
-        if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
+          playVignetteWebAudio(ctx);
       }
   }
 
@@ -338,6 +380,9 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
               if (trackGainNodeRef.current) {
                   // Respeita se houver uma narração em curso
                   trackGainNodeRef.current.gain.value = isNarratingRef.current ? 0.04 : 0.7;
+              } else {
+                  // Direct background mode
+                  audioElRef.current.volume = isNarratingRef.current ? 0.04 : 0.7;
               }
               
               audioElRef.current.onerror = () => {
@@ -356,12 +401,12 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                try {
                    const player = ytPlayerRef.current;
                    console.log(`[YouTube] playTrack: id=${track.src}, isReady=${isYtReady}`);
-
+ 
                    if (typeof player.loadVideoById !== 'function') {
                        console.warn("[YouTube] API carregada mas loadVideoById não é função.");
                        return;
                    }
-
+ 
                    const currentVideoUrl = player.getVideoUrl?.() || "";
                    if (!currentVideoUrl.includes(track.src)) {
                        player.loadVideoById(track.src);
@@ -382,6 +427,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
   const pauseTrack = () => {
       audioElRef.current?.pause();
+      narrationAudioElRef.current?.pause();
       try { ytPlayerRef.current?.pauseVideo(); } catch (e) { void e; }
   };
 
@@ -560,6 +606,72 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
     }
   }
 
+  const playNarrationWebAudio = (ctx: AudioContext, buffer: AudioBuffer | null) => {
+      if (!buffer) {
+          nextNarrationTimeRef.current = Date.now() + (intervalSecondsRef.current * 1000);
+          hasFadedOutRef.current = false;
+          restoreVolume(1.0);
+          return;
+      }
+      
+      isNarratingRef.current = true;
+      setIsNarratingUI(true); 
+      console.log("[SmartPlayer] Iniciando narração (Web Audio), abaixando volume...");
+      if (!hasFadedOutRef.current) lowerVolume(0.5);
+      
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      const voiceGain = ctx.createGain();
+      
+      // Volume da narração - O limiter agora cuida de não estourar. Aumentado para 1.8x
+      voiceGain.gain.value = isSmartEqEnabledRef.current ? 1.8 : 1.0; 
+
+      if (isSmartEqEnabledRef.current) {
+          // Efeito Stereo Widening (Haas Effect)
+          const splitter = ctx.createChannelSplitter(2);
+          const merger = ctx.createChannelMerger(2);
+          const delay = ctx.createDelay();
+          delay.delayTime.value = 0.020; // 20ms de atraso para o canal direito
+
+          source.connect(splitter);
+          splitter.connect(merger, 0, 0); // Canal Esquerdo (Direto)
+          splitter.connect(delay, 0);    // Canal Direito (via Delay)
+          delay.connect(merger, 0, 1);
+          merger.connect(voiceGain);
+      } else {
+          source.connect(voiceGain);
+      }
+
+      // Conecta ao Master Bus (com Limiter)
+      if (masterBusGainRef.current) {
+          voiceGain.connect(masterBusGainRef.current);
+      } else {
+          voiceGain.connect(ctx.destination);
+      }
+
+      narrationSourceNodeRef.current = source;
+      
+      source.onended = () => {
+          console.log("[SmartPlayer] Narração (Web Audio) finalizada. Restaurando volume...");
+          isNarratingRef.current = false;
+          setIsNarratingUI(false); 
+          restoreVolume(2.5); // Restaura um pouco mais rápido
+          nextNarrationTimeRef.current = Date.now() + (intervalSecondsRef.current * 1000);
+          hasFadedOutRef.current = false;
+      };
+      
+      try {
+          source.start(0);
+      } catch (e) {
+          console.error("[SmartPlayer] Erro ao iniciar narração (Web Audio):", e);
+          isNarratingRef.current = false;
+          setIsNarratingUI(false);
+          restoreVolume(1.0);
+          nextNarrationTimeRef.current = Date.now() + (intervalSecondsRef.current * 1000);
+          hasFadedOutRef.current = false;
+      }
+  };
+
   const playNarration = () => {
       const ctx = initAudioContext(); 
       let buffer: AudioBuffer | null = null;
@@ -600,74 +712,101 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
           restoreVolume(1.0);
           return;
       }
-      isNarratingRef.current = true;
-      setIsNarratingUI(true); 
-      console.log("[SmartPlayer] Iniciando narração, abaixando volume...");
-      if (!hasFadedOutRef.current) lowerVolume(0.5);
-      
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      const voiceGain = ctx.createGain();
-      
-      // Volume da narração - O limiter agora cuida de não estourar. Aumentado para 1.8x
-      voiceGain.gain.value = isSmartEqEnabledRef.current ? 1.8 : 1.0; 
 
-      if (isSmartEqEnabledRef.current) {
-          // Efeito Stereo Widening (Haas Effect)
-          const splitter = ctx.createChannelSplitter(2);
-          const merger = ctx.createChannelMerger(2);
-          const delay = ctx.createDelay();
-          delay.delayTime.value = 0.020; // 20ms de atraso para o canal direito
-
-          source.connect(splitter);
-          splitter.connect(merger, 0, 0); // Canal Esquerdo (Direto)
-          splitter.connect(delay, 0);    // Canal Direito (via Delay)
-          delay.connect(merger, 0, 1);
-          merger.connect(voiceGain);
+      if (isBackgroundPlayEnabled) {
+          if (narrationAudioElRef.current) {
+              try {
+                  console.log("[SmartPlayer] Preparando narração em segundo plano...");
+                  const blob = audioBufferToWav(buffer);
+                  const url = URL.createObjectURL(blob);
+                  
+                  isNarratingRef.current = true;
+                  setIsNarratingUI(true);
+                  
+                  if (!hasFadedOutRef.current) lowerVolume(0.5);
+                  
+                  narrationAudioElRef.current.src = url;
+                  
+                  narrationAudioElRef.current.onended = () => {
+                      console.log("[SmartPlayer] Narração em segundo plano finalizada. Restaurando volume...");
+                      isNarratingRef.current = false;
+                      setIsNarratingUI(false);
+                      restoreVolume(2.5);
+                      nextNarrationTimeRef.current = Date.now() + (intervalSecondsRef.current * 1000);
+                      hasFadedOutRef.current = false;
+                      URL.revokeObjectURL(url);
+                  };
+                  
+                  narrationAudioElRef.current.onerror = (e) => {
+                      console.error("[SmartPlayer] Erro ao reproduzir áudio de narração:", e);
+                      isNarratingRef.current = false;
+                      setIsNarratingUI(false);
+                      restoreVolume(1.0);
+                      nextNarrationTimeRef.current = Date.now() + (intervalSecondsRef.current * 1000);
+                      hasFadedOutRef.current = false;
+                      URL.revokeObjectURL(url);
+                  };
+                  
+                  narrationAudioElRef.current.play().catch(e => {
+                      console.error("[SmartPlayer] Erro no play da narração:", e);
+                      isNarratingRef.current = false;
+                      setIsNarratingUI(false);
+                      restoreVolume(1.0);
+                      nextNarrationTimeRef.current = Date.now() + (intervalSecondsRef.current * 1000);
+                      hasFadedOutRef.current = false;
+                      URL.revokeObjectURL(url);
+                  });
+              } catch (e) {
+                  console.error("[SmartPlayer] Falha ao converter buffer para reprodução direta:", e);
+                  playNarrationWebAudio(ctx, buffer);
+              }
+          } else {
+              nextNarrationTimeRef.current = Date.now() + (intervalSecondsRef.current * 1000);
+              hasFadedOutRef.current = false;
+              restoreVolume(1.0);
+          }
       } else {
-          source.connect(voiceGain);
-      }
-
-      // Conecta ao Master Bus (com Limiter)
-      if (masterBusGainRef.current) {
-          voiceGain.connect(masterBusGainRef.current);
-      } else {
-          voiceGain.connect(ctx.destination);
-      }
-
-      narrationSourceNodeRef.current = source;
-      
-      source.onended = () => {
-          console.log("[SmartPlayer] Narração finalizada. Restaurando volume...");
-          isNarratingRef.current = false;
-          setIsNarratingUI(false); 
-          restoreVolume(2.5); // Restaura um pouco mais rápido
-          nextNarrationTimeRef.current = Date.now() + (intervalSecondsRef.current * 1000);
-          hasFadedOutRef.current = false;
-      };
-      
-      try {
-          source.start(0);
-      } catch (e) {
-          console.error("[SmartPlayer] Erro ao iniciar narração:", e);
-          isNarratingRef.current = false;
-          setIsNarratingUI(false);
-          restoreVolume(1.0);
-          nextNarrationTimeRef.current = Date.now() + (intervalSecondsRef.current * 1000);
-          hasFadedOutRef.current = false;
+          playNarrationWebAudio(ctx, buffer);
       }
   };
 
+  const fadeAudioElementVolume = (audio: HTMLAudioElement, endVol: number, durationMs: number) => {
+      if (!audio) return;
+      const startVol = audio.volume;
+      const steps = 20;
+      const stepTime = durationMs / steps;
+      const volStep = (endVol - startVol) / steps;
+      let currentVol = startVol;
+      
+      const intervalId = window.setInterval(() => {
+          if (!audio || audio.paused) {
+              clearInterval(intervalId);
+              return;
+          }
+          currentVol += volStep;
+          if ((volStep > 0 && currentVol >= endVol) || (volStep < 0 && currentVol <= endVol)) {
+              currentVol = endVol;
+              clearInterval(intervalId);
+          }
+          audio.volume = Math.max(0, Math.min(1, currentVol));
+      }, stepTime);
+  };
+
   const lowerVolume = (duration: number = 3.0) => {
-      if (!isSmartEqEnabledRef.current) return;
-      const ctx = initAudioContext();
       console.log(`[SmartPlayer] Ducking: baixando playlist para 10% em ${duration}s`);
+      if (!isSmartEqEnabledRef.current) return;
       
       if (trackGainNodeRef.current) {
+          const ctx = initAudioContext();
           trackGainNodeRef.current.gain.cancelScheduledValues(ctx.currentTime);
           trackGainNodeRef.current.gain.setValueAtTime(trackGainNodeRef.current.gain.value, ctx.currentTime);
           trackGainNodeRef.current.gain.linearRampToValueAtTime(0.04, ctx.currentTime + duration);
       }
+      
+      if (audioElRef.current) {
+          fadeAudioElementVolume(audioElRef.current, 0.04, duration * 1000);
+      }
+      
       if (ytPlayerRef.current && typeof ytPlayerRef.current.getVolume === 'function') {
           try {
             const currentVol = ytPlayerRef.current.getVolume();
@@ -677,15 +816,20 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
   };
 
   const restoreVolume = (duration: number = 2.5) => {
-      if (!isSmartEqEnabledRef.current) return;
-      const ctx = initAudioContext();
       console.log(`[SmartPlayer] Ducking: restaurando playlist para 100% em ${duration}s`);
+      if (!isSmartEqEnabledRef.current) return;
       
       if (trackGainNodeRef.current) {
+          const ctx = initAudioContext();
           trackGainNodeRef.current.gain.cancelScheduledValues(ctx.currentTime);
           trackGainNodeRef.current.gain.setValueAtTime(trackGainNodeRef.current.gain.value, ctx.currentTime);
           trackGainNodeRef.current.gain.linearRampToValueAtTime(0.7, ctx.currentTime + duration);
       }
+      
+      if (audioElRef.current) {
+          fadeAudioElementVolume(audioElRef.current, 0.7, duration * 1000);
+      }
+      
       if (ytPlayerRef.current && typeof ytPlayerRef.current.getVolume === 'function') {
           try {
             const currentVol = ytPlayerRef.current.getVolume();
@@ -920,35 +1064,51 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
     audio.crossOrigin = "anonymous";
     audioElRef.current = audio;
 
-    const trackSource = ctx.createMediaElementSource(audio);
-    const trackGain = ctx.createGain();
-    const masterBus = ctx.createGain();
-    const limiter = ctx.createDynamicsCompressor();
-    const analyser = ctx.createAnalyser();
-    
-    // Configura Limiter (Previne Estouro/Clipping)
-    limiter.threshold.setValueAtTime(-2.0, ctx.currentTime); // Começa a limitar em -2.0dB
-    limiter.knee.setValueAtTime(40, ctx.currentTime); // Curva suave
-    limiter.ratio.setValueAtTime(20, ctx.currentTime); // Compressão forte (Hard Limiter)
-    limiter.attack.setValueAtTime(0.003, ctx.currentTime); // Rápido
-    limiter.release.setValueAtTime(0.25, ctx.currentTime);
-    
-    analyser.fftSize = 256;
-    trackGain.gain.value = 0.7; // Volume base da playlist reduzido para dar espaço à narração
-    masterBus.gain.value = 1.0;
+    const narrationAudio = new Audio();
+    narrationAudio.crossOrigin = "anonymous";
+    narrationAudioElRef.current = narrationAudio;
 
-    // Conexões
-    trackSource.connect(trackGain);
-    trackGain.connect(masterBus);
-    
-    masterBus.connect(limiter);
-    limiter.connect(analyser);
-    analyser.connect(ctx.destination);
-    
-    trackGainNodeRef.current = trackGain;
-    masterBusGainRef.current = masterBus;
-    limiterNodeRef.current = limiter;
-    analyserRef.current = analyser;
+    if (!isBackgroundPlayEnabled) {
+        try {
+            const trackSource = ctx.createMediaElementSource(audio);
+            const trackGain = ctx.createGain();
+            const masterBus = ctx.createGain();
+            const limiter = ctx.createDynamicsCompressor();
+            const analyser = ctx.createAnalyser();
+            
+            // Configura Limiter (Previne Estouro/Clipping)
+            limiter.threshold.setValueAtTime(-2.0, ctx.currentTime); // Começa a limitar em -2.0dB
+            limiter.knee.setValueAtTime(40, ctx.currentTime); // Curva suave
+            limiter.ratio.setValueAtTime(20, ctx.currentTime); // Compressão forte (Hard Limiter)
+            limiter.attack.setValueAtTime(0.003, ctx.currentTime); // Rápido
+            limiter.release.setValueAtTime(0.25, ctx.currentTime);
+            
+            analyser.fftSize = 256;
+            trackGain.gain.value = 0.7; // Volume base da playlist reduzido para dar espaço à narração
+            masterBus.gain.value = 1.0;
+
+            // Conexões
+            trackSource.connect(trackGain);
+            trackGain.connect(masterBus);
+            
+            masterBus.connect(limiter);
+            limiter.connect(analyser);
+            analyser.connect(ctx.destination);
+            
+            trackGainNodeRef.current = trackGain;
+            masterBusGainRef.current = masterBus;
+            limiterNodeRef.current = limiter;
+            analyserRef.current = analyser;
+        } catch (err) {
+            console.error("Failed to connect audio elements to Web Audio context:", err);
+        }
+    } else {
+        // Direct playback mode: reset Web Audio node refs
+        trackGainNodeRef.current = null;
+        masterBusGainRef.current = null;
+        limiterNodeRef.current = null;
+        analyserRef.current = null;
+    }
 
     // Inicialização segura da API do YouTube
     (window as any).onYouTubeIframeAPIReady = () => {
@@ -984,6 +1144,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
     return () => {
       audio.pause();
+      narrationAudio.pause();
       if (ytPlayerRef.current) {
           try { ytPlayerRef.current.destroy(); } catch (e) { void e; }
           ytPlayerRef.current = null;
@@ -993,7 +1154,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       window.removeEventListener('voxgen-play', onVoicePlay);
       window.removeEventListener('voxgen-pause', onVoicePause);
     };
-  }, [companyName, isCorporateMode, userEmail]);
+  }, [companyName, isCorporateMode, userEmail, isBackgroundPlayEnabled]);
 
   useEffect(() => {
     const loadVignette = async () => {
