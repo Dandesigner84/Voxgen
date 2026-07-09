@@ -12,7 +12,7 @@ const getClient = () => {
   let rawKey = "";
   try {
     rawKey = process.env.GEMINI_API_KEY || "";
-  } catch (e) {}
+  } catch (e) { void e; }
   
   if (!rawKey || rawKey === "undefined" || rawKey === "null") {
     try {

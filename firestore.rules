@@ -158,5 +158,58 @@ service cloud.firestore {
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
+
+    match /userPreferences/{userId} {
+      allow read, write: if isSignedIn() && isOwner(userId);
+    }
+
+    match /newsCache/{cacheId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /contentBlocks/{blockId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /playbackHistory/{historyId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update, delete: if isAdmin();
+    }
+
+    match /generatedNarrations/{narrationId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update, delete: if isAdmin();
+    }
+
+    match /playlistInsertions/{insertionId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create, update: if isSignedIn() && isOwner(incoming().userId);
+      allow delete: if isAdmin();
+    }
+
+    match /newsSources/{sourceId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /categories/{categoryId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /voiceProfiles/{profileId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /contentHistory/{historyId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && isOwner(incoming().userId);
+      allow update, delete: if isAdmin();
+    }
   }
 }
