@@ -1167,13 +1167,6 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
         initYoutubePlayer();
     }
     
-    if (isCorporateMode) {
-        const companyId = companyName || userEmail || 'default_corp';
-        setTimeout(() => {
-            syncCorporatePlaylist(companyId);
-        }, 0);
-    }
-
     // Voice Command Listeners
     const onVoicePlay = () => {
         if (!isPlayingRef.current) handleMainPlay();
@@ -1197,7 +1190,16 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       window.removeEventListener('voxgen-play', onVoicePlay);
       window.removeEventListener('voxgen-pause', onVoicePause);
     };
-  }, [companyName, isCorporateMode, userEmail, isBackgroundPlayEnabled]);
+  }, [isBackgroundPlayEnabled]);
+
+  useEffect(() => {
+    if (isCorporateMode && playlist.length === 0) {
+        const companyId = companyName || userEmail || 'default_corp';
+        setTimeout(() => {
+            syncCorporatePlaylist(companyId);
+        }, 0);
+    }
+  }, [isCorporateMode, companyName, userEmail, playlist.length]);
 
   useEffect(() => {
     const loadVignette = async () => {
@@ -1232,18 +1234,14 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
         <div 
             style={{
                 position: 'fixed',
-                bottom: '24px',
-                right: '24px',
-                width: currentTrack?.type === 'youtube' && isPlaying ? '200px' : '1px',
-                height: currentTrack?.type === 'youtube' && isPlaying ? '120px' : '1px',
-                opacity: currentTrack?.type === 'youtube' && isPlaying ? '1' : '0.01',
-                borderRadius: '12px',
+                bottom: '1px',
+                right: '1px',
+                width: '1px',
+                height: '1px',
+                opacity: '0.01',
                 overflow: 'hidden',
-                border: currentTrack?.type === 'youtube' && isPlaying ? '2px solid rgba(99, 102, 241, 0.5)' : 'none',
-                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)',
-                zIndex: 50,
-                transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-                pointerEvents: currentTrack?.type === 'youtube' && isPlaying ? 'auto' : 'none',
+                zIndex: -50,
+                pointerEvents: 'none',
             }}
         >
             <div id="youtube-player-hidden" className="w-full h-full"></div>
@@ -1353,113 +1351,123 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 relative">
-                {isCorpUser && <div className="absolute inset-0 z-10 bg-slate-900/80 backdrop-blur-[1px] flex flex-col items-center justify-center rounded-2xl border border-indigo-500/30"><Lock className="text-indigo-400 mb-2" size={32} /><p className="text-indigo-200 font-bold">Playlist da Empresa</p></div>}
                 <div className="flex justify-between items-center mb-4">
-                    <h4 className="text-white font-bold flex items-center gap-2"><Upload size={18} className="text-purple-400" /> Playlist</h4>
+                    <h4 className="text-white font-bold flex items-center gap-2">
+                        <Upload size={18} className="text-purple-400" /> Playlist
+                        {isCorpUser && (
+                            <span className="text-[10px] bg-indigo-950 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                <Lock size={10} /> Corporativa (Apenas Leitura)
+                            </span>
+                        )}
+                    </h4>
                 </div>
-                <div className="space-y-4 mb-6">
-                    <div className="flex gap-2">
-                        <input type="text" value={webInput} onChange={(e) => setWebInput(e.target.value)} placeholder="Link Direto (YouTube/Spotify)..." className="w-full bg-slate-800 border border-slate-700 rounded-lg py-2 px-4 text-sm text-white outline-none" />
-                        <button onClick={addWebLink} className="bg-indigo-600 text-white px-4 rounded-lg" title="Adicionar por Link"><Link size={18} /></button>
-                        <button onClick={triggerUpload} className="bg-slate-700 text-white px-4 rounded-lg h-full flex items-center justify-center" title="Upload de Arquivo"><FileAudio size={18} /></button>
-                    </div>
 
-                    <div className="relative">
+                {!isCorpUser && (
+                    <div className="space-y-4 mb-6">
                         <div className="flex gap-2">
-                            <div className="relative flex-1">
-                                <Youtube size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                                <input 
-                                    type="text" 
-                                    value={searchQuery} 
-                                    onChange={(e) => setSearchQuery(e.target.value)} 
-                                    onKeyDown={(e) => e.key === 'Enter' && handleSearchYT()}
-                                    placeholder="Pesquisar música no YouTube..." 
-                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg py-2 pl-10 pr-4 text-sm text-white outline-none focus:border-red-500/50 transition-colors" 
-                                />
-                            </div>
-                            <button 
-                                onClick={handleSearchYT} 
-                                disabled={isSearchingYT}
-                                className="bg-red-600 hover:bg-red-500 text-white px-4 rounded-lg flex items-center justify-center disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
-                                title="Pesquisar YouTube"
-                            >
-                                {isSearchingYT ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
-                            </button>
+                            <input type="text" value={webInput} onChange={(e) => setWebInput(e.target.value)} placeholder="Link Direto (YouTube/Spotify)..." className="w-full bg-slate-800 border border-slate-700 rounded-lg py-2 px-4 text-sm text-white outline-none" />
+                            <button onClick={addWebLink} className="bg-indigo-600 text-white px-4 rounded-lg" title="Adicionar por Link"><Link size={18} /></button>
+                            <button onClick={triggerUpload} className="bg-slate-700 text-white px-4 rounded-lg h-full flex items-center justify-center" title="Upload de Arquivo"><FileAudio size={18} /></button>
                         </div>
 
-                        {searchError && (
-                            <div className="mt-2 text-[10px] text-red-400 flex items-center gap-1 bg-red-400/10 p-2 rounded-lg border border-red-400/20 animate-in fade-in slide-in-from-top-1">
-                                <AlertCircle size={10} /> {searchError}
-                            </div>
-                        )}
-
-                        {/* Testimonials Banner */}
-                        {highlightedFeedbacks.length > 0 && (
-                            <div className="mt-4 p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl animate-fade-in relative overflow-hidden">
-                                <div className="flex items-center gap-2 mb-2 relative z-10">
-                                    <Star size={12} className="text-amber-500 fill-amber-500" />
-                                    <span className="text-[9px] font-black uppercase text-indigo-400 tracking-widest">O que dizem os usuários</span>
+                        <div className="relative">
+                            <div className="flex gap-2">
+                                <div className="relative flex-1">
+                                    <Youtube size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                                    <input 
+                                        type="text" 
+                                        value={searchQuery} 
+                                        onChange={(e) => setSearchQuery(e.target.value)} 
+                                        onKeyDown={(e) => e.key === 'Enter' && handleSearchYT()}
+                                        placeholder="Pesquisar música no YouTube..." 
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-lg py-2 pl-10 pr-4 text-sm text-white outline-none focus:border-red-500/50 transition-colors" 
+                                    />
                                 </div>
-                                <div className="relative h-12 overflow-hidden z-10">
-                                    {highlightedFeedbacks.map((f, i) => (
+                                <button 
+                                    onClick={handleSearchYT} 
+                                    disabled={isSearchingYT}
+                                    className="bg-red-600 hover:bg-red-500 text-white px-4 rounded-lg flex items-center justify-center disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
+                                    title="Pesquisar YouTube"
+                                >
+                                    {isSearchingYT ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} />}
+                                </button>
+                            </div>
+
+                            {searchError && (
+                                <div className="mt-2 text-[10px] text-red-400 flex items-center gap-1 bg-red-400/10 p-2 rounded-lg border border-red-400/20 animate-in fade-in slide-in-from-top-1">
+                                    <AlertCircle size={10} /> {searchError}
+                                </div>
+                            )}
+
+                            {/* Testimonials Banner */}
+                            {highlightedFeedbacks.length > 0 && (
+                                <div className="mt-4 p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl animate-fade-in relative overflow-hidden">
+                                    <div className="flex items-center gap-2 mb-2 relative z-10">
+                                        <Star size={12} className="text-amber-500 fill-amber-500" />
+                                        <span className="text-[9px] font-black uppercase text-indigo-400 tracking-widest">O que dizem os usuários</span>
+                                    </div>
+                                    <div className="relative h-12 overflow-hidden z-10">
+                                        {highlightedFeedbacks.map((f, i) => (
+                                            <div 
+                                                key={f.id} 
+                                                className={`absolute inset-0 transition-all duration-1000 flex flex-col justify-center ${i === currentFeedbackIndex ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+                                            >
+                                                <p className="text-[11px] text-slate-200 font-medium line-clamp-2 italic leading-tight">"{f.comment}"</p>
+                                                <p className="text-[9px] text-indigo-300 font-bold mt-1">— {f.userName}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="absolute -right-4 -bottom-4 opacity-10">
+                                        <Star size={64} className="text-indigo-500" />
+                                    </div>
+                                </div>
+                            )}
+
+                            {searchResults.length > 0 && (
+                                <div className="absolute top-full left-0 right-0 z-30 mt-2 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden max-h-80 overflow-y-auto animate-in slide-in-from-top-2 duration-200">
+                                    <div className="p-2 bg-slate-800/50 border-b border-slate-700 font-bold text-[10px] text-slate-400 uppercase tracking-wider flex justify-between items-center">
+                                        Resultados do YouTube
+                                        <button onClick={() => setSearchResults([])} className="text-slate-500 hover:text-white">Limpar</button>
+                                    </div>
+                                    {searchResults.map(result => (
                                         <div 
-                                            key={f.id} 
-                                            className={`absolute inset-0 transition-all duration-1000 flex flex-col justify-center ${i === currentFeedbackIndex ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+                                            key={result.videoId}
+                                            className="w-full flex items-center gap-3 p-3 hover:bg-slate-800 transition-colors border-b border-slate-800 last:border-0 group"
                                         >
-                                            <p className="text-[11px] text-slate-200 font-medium line-clamp-2 italic leading-tight">"{f.comment}"</p>
-                                            <p className="text-[9px] text-indigo-300 font-bold mt-1">— {f.userName}</p>
+                                            <div className="relative shrink-0 w-16 h-10 shadow-sm rounded overflow-hidden">
+                                                <img src={result.thumbnail} className="w-full h-full object-cover" alt="" />
+                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                                    <Music size={12} className="text-white" />
+                                                </div>
+                                            </div>
+                                            <div className="flex-1 min-w-0 pr-4">
+                                                <p className="text-xs text-white font-medium line-clamp-1 leading-tight group-hover:text-red-400 transition-colors" title={result.title}>{result.title}</p>
+                                                <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-1">{result.channelTitle}</p>
+                                            </div>
+                                            <div className="flex gap-1">
+                                                <button 
+                                                    onClick={() => playNowYT(result)}
+                                                    className="p-1.5 bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white rounded transition-all"
+                                                    title="Reproduzir Agora"
+                                                >
+                                                    <Play size={12} fill="currentColor" />
+                                                </button>
+                                                <button 
+                                                    onClick={() => addYTSearchTrack(result)}
+                                                    className="p-1.5 bg-slate-700 text-slate-300 hover:bg-indigo-600 hover:text-white rounded transition-all"
+                                                    title="Adicionar à Fila"
+                                                >
+                                                    <Link size={12} />
+                                                </button>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
-                                <div className="absolute -right-4 -bottom-4 opacity-10">
-                                    <Star size={64} className="text-indigo-500" />
-                                </div>
-                            </div>
-                        )}
-
-                        {searchResults.length > 0 && (
-                            <div className="absolute top-full left-0 right-0 z-30 mt-2 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden max-h-80 overflow-y-auto animate-in slide-in-from-top-2 duration-200">
-                                <div className="p-2 bg-slate-800/50 border-b border-slate-700 font-bold text-[10px] text-slate-400 uppercase tracking-wider flex justify-between items-center">
-                                    Resultados do YouTube
-                                    <button onClick={() => setSearchResults([])} className="text-slate-500 hover:text-white">Limpar</button>
-                                </div>
-                                {searchResults.map(result => (
-                                    <div 
-                                        key={result.videoId}
-                                        className="w-full flex items-center gap-3 p-3 hover:bg-slate-800 transition-colors border-b border-slate-800 last:border-0 group"
-                                    >
-                                        <div className="relative shrink-0 w-16 h-10 shadow-sm rounded overflow-hidden">
-                                            <img src={result.thumbnail} className="w-full h-full object-cover" alt="" />
-                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                                <Music size={12} className="text-white" />
-                                            </div>
-                                        </div>
-                                        <div className="flex-1 min-w-0 pr-4">
-                                            <p className="text-xs text-white font-medium line-clamp-1 leading-tight group-hover:text-red-400 transition-colors" title={result.title}>{result.title}</p>
-                                            <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-1">{result.channelTitle}</p>
-                                        </div>
-                                        <div className="flex gap-1">
-                                            <button 
-                                                onClick={() => playNowYT(result)}
-                                                className="p-1.5 bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white rounded transition-all"
-                                                title="Reproduzir Agora"
-                                            >
-                                                <Play size={12} fill="currentColor" />
-                                            </button>
-                                            <button 
-                                                onClick={() => addYTSearchTrack(result)}
-                                                className="p-1.5 bg-slate-700 text-slate-300 hover:bg-indigo-600 hover:text-white rounded transition-all"
-                                                title="Adicionar à Fila"
-                                            >
-                                                <Link size={12} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </div>
-                </div>
+                )}
+
                 <div className="h-64 overflow-y-auto custom-scrollbar space-y-2 pr-2">
                     {playlist.map((track, idx) => (
                         <div key={track.id} className={`flex items-center justify-between p-3 rounded-lg text-sm ${idx === currentTrackIndex ? 'bg-cyan-900/20 border border-cyan-500/30 text-cyan-200' : 'bg-slate-800 text-slate-300'}`}>
@@ -1467,7 +1475,9 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                                 {track.type === 'youtube' ? <Youtube size={14} className="text-red-400" /> : <Music size={14} className="text-green-400" />}
                                 <span className="truncate">{track.name}</span>
                             </div>
-                            <button onClick={() => setPlaylist(prev => prev.filter(t => t.id !== track.id))} className="text-slate-500 hover:text-red-400"><Trash2 size={14} /></button>
+                            {!isCorpUser && (
+                                <button onClick={() => setPlaylist(prev => prev.filter(t => t.id !== track.id))} className="text-slate-500 hover:text-red-400"><Trash2 size={14} /></button>
+                            )}
                         </div>
                     ))}
                     {playlist.length === 0 && (
