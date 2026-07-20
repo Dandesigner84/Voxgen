@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Radio, Upload, Play, Pause, SkipForward, Mic2, Clock, Youtube, Trash2, Link, Smartphone, Music, CheckSquare, Square, Lock, Sliders, Volume2, CloudUpload, Repeat, Repeat1, Shuffle, FileAudio, Check, AlertCircle, Loader2, Search, Star, Sparkles } from 'lucide-react';
+import { Radio, Upload, Play, Pause, SkipForward, Mic2, Clock, Youtube, Trash2, Link, Smartphone, Music, CheckSquare, Square, Lock, Sliders, Volume2, CloudUpload, Repeat, Repeat1, Shuffle, FileAudio, AlertCircle, Loader2, Search, Star } from 'lucide-react';
 import { AudioItem, UserRole, UserFeedback } from '../types';
 import { isSmartPlayerUnlocked } from '../services/monetizationService';
 import { usePlatformDetection } from '../hooks/usePlatformDetection';
@@ -10,17 +10,6 @@ import { buscarYouTube, YouTubeSearchResult } from '../services/youtubeService';
 import { decodeAudioData, audioBufferToWav } from '../utils/audioUtils';
 import { VIGNETTE_TEXT } from '../constants';
 import { getAllFeedbacks } from '../services/analyticsService';
-import { 
-  getPreferences, 
-  savePreferences, 
-  getNextSmartPlayBlock, 
-  logPlayback, 
-  SMART_PLAY_CATEGORIES, 
-  SMART_PLAY_STYLES, 
-  SMART_PLAY_LANGUAGES 
-} from '../services/smartPlayService';
-import { getVoicesByUser } from '../services/voiceService';
-import { SmartPlayPreferences, ContentBlock, CustomVoice } from '../types';
 
 interface Track {
   id: string;
@@ -98,20 +87,6 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
   
   const [isBackgroundPlayEnabled, setIsBackgroundPlayEnabled] = useState(true);
 
-  // SmartPlay State variables
-  const [isSmartPlayActive, setIsSmartPlayActive] = useState(false);
-  const [smartPlayPrefs, setSmartPlayPrefs] = useState<SmartPlayPreferences | null>(null);
-  const [isPreFetchingBlock, setIsPreFetchingBlock] = useState(false);
-  const [nextSmartBlock, setNextSmartBlock] = useState<ContentBlock | null>(null);
-  const [isSmartBlockPlaying, setIsSmartBlockPlaying] = useState(false);
-  const [currentSmartBlock, setCurrentSmartBlock] = useState<ContentBlock | null>(null);
-  const [customVoiceOptions, setCustomVoiceOptions] = useState<CustomVoice[]>([]);
-  const [isSmartPlaySaving, setIsSmartPlaySaving] = useState(false);
-
-  // SmartPlay Refs
-  const tracksPlayedRef = useRef(0);
-  const lastSmartPlayTimeRef = useRef(Date.now());
-  const smartPlayAudioElRef = useRef<HTMLAudioElement | null>(null);
   const audioElRef = useRef<HTMLAudioElement | null>(null);
   const narrationAudioElRef = useRef<HTMLAudioElement | null>(null);
   const ytPlayerRef = useRef<any>(null);
@@ -144,105 +119,6 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       setHighlightedFeedbacks(all.filter(f => f.isHighlighted));
     } catch (e) { console.warn("Failed to load feedbacks for player", e); }
   }
-
-  const prefetchSmartBlock = async (userId: string) => {
-    if (isPreFetchingBlock || nextSmartBlock) return;
-    setTimeout(() => {
-      setIsPreFetchingBlock(true);
-    }, 0);
-    try {
-      const block = await getNextSmartPlayBlock(userId);
-      if (block) {
-        setNextSmartBlock(block);
-      }
-    } catch (err) {
-      console.warn("[SmartPlay] Falha ao pré-carregar bloco:", err);
-    } finally {
-      setTimeout(() => {
-        setIsPreFetchingBlock(false);
-      }, 0);
-    }
-  };
-
-  const playSmartPlayBlock = (block: ContentBlock) => {
-    const ctx = initAudioContext();
-    setIsSmartBlockPlaying(true);
-    setCurrentSmartBlock(block);
-    console.log("[SmartPlay] Iniciando Momento Informativo IA:", block.title);
-    
-    // Pause standard playlist tracks
-    pauseTrack();
-    
-    let url = '';
-    try {
-      const binary = window.atob(block.audioBase64);
-      const array = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) {
-        array[i] = binary.charCodeAt(i);
-      }
-      const blob = new Blob([array], { type: 'audio/wav' });
-      url = URL.createObjectURL(blob);
-      
-      if (smartPlayAudioElRef.current) {
-        smartPlayAudioElRef.current.src = url;
-        
-        smartPlayAudioElRef.current.onended = () => {
-          console.log("[SmartPlay] Momento Informativo IA finalizado com sucesso.");
-          finishSmartPlayBlock(block, 'play');
-          URL.revokeObjectURL(url);
-        };
-        
-        smartPlayAudioElRef.current.onerror = (e) => {
-          console.error("[SmartPlay] Erro ao tocar áudio de SmartPlay:", e);
-          finishSmartPlayBlock(block, 'skip');
-          URL.revokeObjectURL(url);
-        };
-        
-        smartPlayAudioElRef.current.play().catch(e => {
-          console.error("[SmartPlay] Falha no play do SmartPlay:", e);
-          finishSmartPlayBlock(block, 'skip');
-          URL.revokeObjectURL(url);
-        });
-      } else {
-        throw new Error("Elemento de áudio de SmartPlay indisponível.");
-      }
-    } catch (err) {
-      console.error("[SmartPlay] Falha ao reproduzir áudio do SmartPlay:", err);
-      finishSmartPlayBlock(block, 'skip');
-    }
-  };
-
-  const finishSmartPlayBlock = (block: ContentBlock, action: 'play' | 'skip' | 'like' | 'dislike') => {
-    setIsSmartBlockPlaying(false);
-    setCurrentSmartBlock(null);
-    setNextSmartBlock(null);
-    tracksPlayedRef.current = 0;
-    lastSmartPlayTimeRef.current = Date.now();
-    
-    if (userEmail) {
-      logPlayback(userEmail, block.id, block.category, action).catch(err => console.warn(err));
-      // Pre-fetch next block immediately
-      prefetchSmartBlock(userEmail);
-    }
-    
-    // Resume standard music playlist playback!
-    if (isPlaying) {
-      setTimeout(() => {
-        // Move to the next music track seamlessly!
-        if (playlist.length > 0) {
-          if (currentTrackIndex < playlist.length - 1) {
-            setCurrentTrackIndex(prev => prev + 1);
-          } else {
-            if (loopMode === 'all') {
-              setCurrentTrackIndex(0);
-            } else {
-              setIsPlaying(false);
-            }
-          }
-        }
-      }, 100);
-    }
-  };
 
   const isPlayingRef = useRef(isPlaying);
   const isVignettePlayingRef = useRef(isVignettePlaying);
@@ -560,33 +436,6 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
   function handleNextTrack() {
       if (playlist.length === 0) return;
-
-      // Check SmartPlay Intercalation
-      if (isSmartPlayActive && nextSmartBlock) {
-          tracksPlayedRef.current += 1;
-          
-          let shouldTrigger: boolean;
-          if (smartPlayPrefs) {
-              const { intervalType, intervalValue } = smartPlayPrefs;
-              if (intervalType === 'tracks') {
-                  shouldTrigger = tracksPlayedRef.current >= intervalValue;
-              } else if (intervalType === 'minutes') {
-                  const elapsedMin = (Date.now() - lastSmartPlayTimeRef.current) / 60000;
-                  shouldTrigger = elapsedMin >= intervalValue;
-              } else { // smart
-                  const elapsedMin = (Date.now() - lastSmartPlayTimeRef.current) / 60000;
-                  shouldTrigger = tracksPlayedRef.current >= 3 || elapsedMin >= 15;
-              }
-          } else {
-              // Default fallback
-              shouldTrigger = tracksPlayedRef.current >= 3;
-          }
-          
-          if (shouldTrigger) {
-              playSmartPlayBlock(nextSmartBlock);
-              return; // Halt track change
-          }
-      }
 
       // Sorteia vinheta aleatória entre faixas (20% de chance)
       const shouldPlayVignette = getRandomFloat() > 0.8;
@@ -1262,10 +1111,6 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
     narrationAudio.crossOrigin = "anonymous";
     narrationAudioElRef.current = narrationAudio;
 
-    const smartPlayAudio = new Audio();
-    smartPlayAudio.crossOrigin = "anonymous";
-    smartPlayAudioElRef.current = smartPlayAudio;
-
     if (!isBackgroundPlayEnabled) {
         try {
             const trackSource = ctx.createMediaElementSource(audio);
@@ -1343,7 +1188,6 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
     return () => {
       audio.pause();
       narrationAudio.pause();
-      smartPlayAudio.pause();
       if (ytPlayerRef.current) {
           try { ytPlayerRef.current.destroy(); } catch (e) { void e; }
           ytPlayerRef.current = null;
@@ -1367,32 +1211,6 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
     };
     loadVignette();
   }, []);
-
-  useEffect(() => {
-    const loadSmartPlayPrefsAndVoices = async () => {
-        if (userEmail) {
-            try {
-                const prefs = await getPreferences(userEmail);
-                setSmartPlayPrefs(prefs);
-                setIsSmartPlayActive(prefs.isPremiumEnabled ?? true);
-                
-                const voices = await getVoicesByUser(userEmail);
-                setCustomVoiceOptions(voices);
-            } catch (e) {
-                console.warn("Failed to load SmartPlay configurations", e);
-            }
-        }
-    };
-    loadSmartPlayPrefsAndVoices();
-  }, [userEmail]);
-
-  useEffect(() => {
-      if (isSmartPlayActive && userEmail && !nextSmartBlock && !isPreFetchingBlock) {
-          setTimeout(() => {
-              prefetchSmartBlock(userEmail);
-          }, 0);
-      }
-  }, [isSmartPlayActive, userEmail, nextSmartBlock, isPreFetchingBlock]);
 
   useEffect(() => {
     if (!currentTrack) return;
@@ -1472,40 +1290,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
              <div className={`absolute inset-0 opacity-20 blur-3xl transition-colors duration-700 ${isNarratingRef.current ? 'bg-cyan-600' : 'bg-gradient-to-br from-cyan-500 to-blue-600'}`} />
              
              <div className="relative z-10 flex flex-col items-center w-full">
-                 {isSmartBlockPlaying && currentSmartBlock ? (
-                     <div className="flex flex-col items-center w-full text-center max-w-lg py-6 animate-fade-in">
-                         {/* Pulsing smart glow */}
-                         <div className="w-40 h-40 rounded-full bg-indigo-500/10 border-2 border-indigo-500/30 flex items-center justify-center relative mb-6">
-                             <div className="absolute inset-0 rounded-full border border-indigo-400/20 animate-ping" />
-                             <Radio size={56} className="text-indigo-400 animate-bounce" />
-                         </div>
-                         
-                         <span className="bg-indigo-600/30 border border-indigo-500/50 text-indigo-300 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider mb-2 flex items-center gap-1.5 animate-pulse">
-                             <Sparkles size={12} className="text-indigo-400" /> Momento Informativo IA
-                         </span>
-                         
-                         <span className="text-xs text-slate-400 uppercase tracking-widest font-semibold mb-3">
-                             Categoria: {currentSmartBlock.category}
-                         </span>
-                         
-                         <h3 className="text-2xl font-bold text-white mb-4 line-clamp-2 px-4 leading-tight">
-                             {currentSmartBlock.title}
-                         </h3>
-                         
-                         <div className="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-4 w-full text-sm text-slate-300 max-h-32 overflow-y-auto mb-6 text-left shadow-inner font-sans leading-relaxed">
-                             {currentSmartBlock.text}
-                         </div>
-                         
-                         <div className="flex items-center gap-4">
-                             <button 
-                                 onClick={() => finishSmartPlayBlock(currentSmartBlock, 'skip')}
-                                 className="px-6 py-2.5 bg-slate-800 text-slate-200 border border-slate-700 hover:border-slate-500 rounded-full text-xs font-bold flex items-center gap-2 hover:bg-slate-700 transition-all shadow-lg active:scale-95"
-                             >
-                                 <SkipForward size={14} /> Pular Bloco IA
-                             </button>
-                         </div>
-                     </div>
-                 ) : currentTrack?.type === 'spotify' ? (
+                 {currentTrack?.type === 'spotify' ? (
                      <div className="w-full max-w-md relative flex flex-col items-center">
                          <div className="relative w-full rounded-xl overflow-hidden shadow-2xl bg-black md:h-[352px]">
                              <iframe 
@@ -1750,271 +1535,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
             </div>
         </div>
 
-        {/* SmartPlay Config Panel */}
-        <div className="bg-slate-900/50 border border-slate-800 rounded-3xl p-8 mt-8 relative">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-6">
-                <div>
-                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                        <Sparkles className="text-indigo-400 animate-pulse" /> SmartPlay — Momento Informativo IA
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-1">
-                        Intercala blocos informativos gerados sob demanda com Busca do Google e TTS entre as músicas.
-                    </p>
-                </div>
-                <button 
-                    onClick={async () => {
-                        const newValue = !isSmartPlayActive;
-                        setIsSmartPlayActive(newValue);
-                        if (smartPlayPrefs) {
-                            const updated = { ...smartPlayPrefs, isPremiumEnabled: newValue };
-                            setSmartPlayPrefs(updated);
-                            await savePreferences(updated);
-                        }
-                    }}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isSmartPlayActive ? 'bg-indigo-600' : 'bg-slate-700'}`}
-                >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isSmartPlayActive ? 'translate-x-6' : 'translate-x-1'}`} />
-                </button>
-            </div>
-
-            {isSmartPlayActive && (
-                <div className="space-y-6">
-                    <div>
-                        <label className="text-xs font-bold text-slate-400 block mb-2 uppercase tracking-wider">
-                            Categorias de Interesse ({smartPlayPrefs?.selectedCategories?.length || 0} selecionadas)
-                        </label>
-                        <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto custom-scrollbar p-1">
-                            {SMART_PLAY_CATEGORIES.map(category => {
-                                const isSelected = smartPlayPrefs?.selectedCategories?.includes(category);
-                                return (
-                                    <button
-                                        key={category}
-                                        onClick={async () => {
-                                            if (!smartPlayPrefs) return;
-                                            let updatedList = [...smartPlayPrefs.selectedCategories];
-                                            if (isSelected) {
-                                                updatedList = updatedList.filter(c => c !== category);
-                                            } else {
-                                                updatedList.push(category);
-                                            }
-                                            const updated = { ...smartPlayPrefs, selectedCategories: updatedList };
-                                            setSmartPlayPrefs(updated);
-                                            await savePreferences(updated);
-                                            setNextSmartBlock(null);
-                                        }}
-                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${isSelected ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500' : 'bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-600'}`}
-                                    >
-                                        {category}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label className="text-xs font-bold text-slate-400 block mb-2 uppercase tracking-wider">
-                                Estilo de Locução
-                            </label>
-                            <select
-                                value={smartPlayPrefs?.locutionStyle || 'radio_fm'}
-                                onChange={async (e) => {
-                                    if (!smartPlayPrefs) return;
-                                    const updated = { ...smartPlayPrefs, locutionStyle: e.target.value as any };
-                                    setSmartPlayPrefs(updated);
-                                    await savePreferences(updated);
-                                    setNextSmartBlock(null);
-                                }}
-                                className="w-full bg-slate-800 border border-slate-700 rounded-xl py-2.5 px-4 text-sm text-slate-200 outline-none focus:border-indigo-500"
-                            >
-                                {SMART_PLAY_STYLES.map(style => (
-                                    <option key={style.id} value={style.id}>{style.name}</option>
-                                ))}
-                            </select>
-                        </div>
-                        
-                        <div>
-                            <label className="text-xs font-bold text-slate-400 block mb-2 uppercase tracking-wider">
-                                Voz do Locutor
-                            </label>
-                            <select
-                                value={smartPlayPrefs?.voiceId || 'Kore'}
-                                onChange={async (e) => {
-                                    if (!smartPlayPrefs) return;
-                                    const updated = { ...smartPlayPrefs, voiceId: e.target.value };
-                                    setSmartPlayPrefs(updated);
-                                    await savePreferences(updated);
-                                    setNextSmartBlock(null);
-                                }}
-                                className="w-full bg-slate-800 border border-slate-700 rounded-xl py-2.5 px-4 text-sm text-slate-200 outline-none focus:border-indigo-500"
-                            >
-                                <optgroup label="Vozes Padrão">
-                                    <option value="Kore">Kore (Neutro, News)</option>
-                                    <option value="Puck">Puck (Alegre, FM)</option>
-                                    <option value="Charon">Charon (Sóbrio, Jornal)</option>
-                                    <option value="Fenrir">Fenrir (Jovem, Descontraído)</option>
-                                    <option value="Aoede">Aoede (Inspiradora, Suave)</option>
-                                </optgroup>
-                                {customVoiceOptions.length > 0 && (
-                                    <optgroup label="Suas Vozes Clonadas">
-                                        {customVoiceOptions.map(voice => (
-                                            <option key={voice.id} value={voice.name}>{voice.name}</option>
-                                        ))}
-                                    </optgroup>
-                                )}
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div>
-                            <label className="text-xs font-bold text-slate-400 block mb-2 uppercase tracking-wider">
-                                Tipo de Frequência
-                            </label>
-                            <select
-                                value={smartPlayPrefs?.intervalType || 'tracks'}
-                                onChange={async (e) => {
-                                    if (!smartPlayPrefs) return;
-                                    const updated = { ...smartPlayPrefs, intervalType: e.target.value as any };
-                                    setSmartPlayPrefs(updated);
-                                    await savePreferences(updated);
-                                }}
-                                className="w-full bg-slate-800 border border-slate-700 rounded-xl py-2.5 px-4 text-sm text-slate-200 outline-none focus:border-indigo-500"
-                            >
-                                <option value="tracks">A cada X Músicas</option>
-                                <option value="minutes">A cada X Minutos</option>
-                                <option value="smart">Modo Rádio Inteligente</option>
-                            </select>
-                        </div>
-                        
-                        <div>
-                            <label className="text-xs font-bold text-slate-400 block mb-2 uppercase tracking-wider">
-                                Valor do Intervalo ({smartPlayPrefs?.intervalType === 'tracks' ? 'Músicas' : 'Minutos'})
-                            </label>
-                            <input
-                                type="number"
-                                min="1"
-                                max="60"
-                                value={smartPlayPrefs?.intervalValue || 3}
-                                onChange={async (e) => {
-                                    if (!smartPlayPrefs) return;
-                                    const val = Math.max(1, parseInt(e.target.value) || 1);
-                                    const updated = { ...smartPlayPrefs, intervalValue: val };
-                                    setSmartPlayPrefs(updated);
-                                    await savePreferences(updated);
-                                }}
-                                className="w-full bg-slate-800 border border-slate-700 rounded-xl py-2 px-4 text-sm text-slate-200 outline-none focus:border-indigo-500"
-                            />
-                        </div>
-                        
-                        <div>
-                            <label className="text-xs font-bold text-slate-400 block mb-2 uppercase tracking-wider">
-                                Cobertura Regional
-                            </label>
-                            <select
-                                value={smartPlayPrefs?.scope || 'global'}
-                                onChange={async (e) => {
-                                    if (!smartPlayPrefs) return;
-                                    const updated = { ...smartPlayPrefs, scope: e.target.value as any };
-                                    setSmartPlayPrefs(updated);
-                                    await savePreferences(updated);
-                                    setNextSmartBlock(null);
-                                }}
-                                className="w-full bg-slate-800 border border-slate-700 rounded-xl py-2.5 px-4 text-sm text-slate-200 outline-none focus:border-indigo-500"
-                            >
-                                <option value="global">Notícias Internacionais</option>
-                                <option value="regional">Notícias Nacionais (Brasil)</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="text-xs font-bold text-slate-400 block mb-2 uppercase tracking-wider">
-                            Temas Bloqueados / Filtros de Conteúdo
-                        </label>
-                        <div className="flex gap-2 mb-3">
-                            <input 
-                                type="text" 
-                                id="new-blocked-theme" 
-                                placeholder="Adicionar tema para evitar... (ex: política, tragédias)" 
-                                onKeyDown={async (e) => {
-                                    if (e.key === 'Enter') {
-                                        const input = e.currentTarget;
-                                        const theme = input.value.trim();
-                                        if (theme && smartPlayPrefs) {
-                                            const updatedList = [...smartPlayPrefs.blockedThemes, theme];
-                                            const updated = { ...smartPlayPrefs, blockedThemes: updatedList };
-                                            setSmartPlayPrefs(updated);
-                                            await savePreferences(updated);
-                                            input.value = "";
-                                            setNextSmartBlock(null);
-                                        }
-                                    }
-                                }}
-                                className="flex-1 bg-slate-800 border border-slate-700 rounded-xl py-2 px-4 text-sm text-slate-200 outline-none focus:border-indigo-500" 
-                            />
-                            <button 
-                                onClick={async () => {
-                                    const input = document.getElementById('new-blocked-theme') as HTMLInputElement;
-                                    const theme = input?.value.trim();
-                                    if (theme && smartPlayPrefs) {
-                                        const updatedList = [...smartPlayPrefs.blockedThemes, theme];
-                                        const updated = { ...smartPlayPrefs, blockedThemes: updatedList };
-                                        setSmartPlayPrefs(updated);
-                                        await savePreferences(updated);
-                                        if (input) input.value = "";
-                                        setNextSmartBlock(null);
-                                    }
-                                }}
-                                className="px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition-all"
-                            >
-                                Adicionar
-                            </button>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                            {smartPlayPrefs?.blockedThemes?.map(theme => (
-                                <span 
-                                    key={theme} 
-                                    className="bg-slate-850 border border-slate-700 text-slate-300 text-xs px-3 py-1 rounded-full flex items-center gap-1.5"
-                                >
-                                    {theme}
-                                    <button 
-                                        onClick={async () => {
-                                            if (!smartPlayPrefs) return;
-                                            const updatedList = smartPlayPrefs.blockedThemes.filter(t => t !== theme);
-                                            const updated = { ...smartPlayPrefs, blockedThemes: updatedList };
-                                            setSmartPlayPrefs(updated);
-                                            await savePreferences(updated);
-                                            setNextSmartBlock(null);
-                                        }}
-                                        className="text-slate-500 hover:text-red-400 font-bold ml-1"
-                                    >
-                                        ×
-                                    </button>
-                                </span>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            <div className="flex items-center gap-2 mt-4 text-xs text-slate-400 border-t border-slate-800 pt-4">
-                {isPreFetchingBlock ? (
-                    <>
-                        <Loader2 size={12} className="text-indigo-400 animate-spin" />
-                        <span>Pré-carregando próximo informativo inteligente em segundo plano...</span>
-                    </>
-                ) : nextSmartBlock ? (
-                    <>
-                        <Check size={12} className="text-green-400" />
-                        <span>Próximo bloco informativo pronto em segundo plano ("{nextSmartBlock.title}")</span>
-                    </>
-                ) : (
-                    <span>Aguardando ativação ou criação de novo bloco...</span>
-                )}
-            </div>
-        </div>
-
+        {/* Evaluation button */}
         <div className="flex justify-center mt-12 gap-4">
             <button 
                 onClick={() => {
