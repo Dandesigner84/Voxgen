@@ -1128,12 +1128,12 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       if (selectedNarrationIds.includes(id)) {
           setSelectedNarrationIds(prev => prev.filter(item => item !== id));
       } else {
-          if (isPremium || isCorporateMode) {
-               if (selectedNarrationIds.length >= 20) { alert("Limite de seleção atingido."); return; }
-               setSelectedNarrationIds(prev => [...prev, id]);
-          } else {
-               setSelectedNarrationIds([id]);
+          const limitValue = (isPremium || isCorporateMode) ? 20 : 10;
+          if (selectedNarrationIds.length >= limitValue) {
+               alert(`Limite de seleção de ${limitValue} narrações atingido.`);
+               return;
           }
+          setSelectedNarrationIds(prev => [...prev, id]);
       }
   };
 
