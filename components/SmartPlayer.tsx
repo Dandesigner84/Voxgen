@@ -86,10 +86,12 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
   const [currentFeedbackIndex, setCurrentFeedbackIndex] = useState(0);
   
   const [isBackgroundPlayEnabled, setIsBackgroundPlayEnabled] = useState(true);
+  const [showMiniPlayer, setShowMiniPlayer] = useState(false);
 
   const audioElRef = useRef<HTMLAudioElement | null>(null);
   const narrationAudioElRef = useRef<HTMLAudioElement | null>(null);
   const ytPlayerRef = useRef<any>(null);
+  const currentYtVideoIdRef = useRef<string | null>(null);
   const trackGainNodeRef = useRef<GainNode | null>(null); // Renamed from gainNodeRef for clarity
   const masterBusGainRef = useRef<GainNode | null>(null);
   const limiterNodeRef = useRef<DynamicsCompressorNode | null>(null);
@@ -404,15 +406,15 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                try {
                    const player = ytPlayerRef.current;
                    console.log(`[YouTube] playTrack: id=${track.src}, isReady=${isYtReady}`);
- 
+  
                    if (typeof player.loadVideoById !== 'function') {
                        console.warn("[YouTube] API carregada mas loadVideoById não é função.");
                        return;
                    }
- 
-                   const currentVideoUrl = player.getVideoUrl?.() || "";
-                   if (!currentVideoUrl.includes(track.src)) {
+  
+                   if (currentYtVideoIdRef.current !== track.src) {
                        player.loadVideoById(track.src);
+                       currentYtVideoIdRef.current = track.src;
                    } else {
                        const state = player.getPlayerState?.();
                        if (state !== 1) player.playVideo();
@@ -1190,6 +1192,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       window.removeEventListener('voxgen-play', onVoicePlay);
       window.removeEventListener('voxgen-pause', onVoicePause);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isBackgroundPlayEnabled]);
 
   useEffect(() => {
@@ -1212,6 +1215,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
         } catch (e) { console.warn("Failed to preload vignette", e); }
     };
     loadVignette();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -1220,6 +1224,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
         playTrack(currentTrack);
         startScheduler();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTrackIndex]); 
 
   useEffect(() => {
@@ -1227,21 +1232,37 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
         console.log("[YouTube] Sincronização reativa: Play");
         playTrack(currentTrack);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isYtReady, isPlaying, currentTrackIndex, isVignettePlaying]);
 
   return (
     <div className="max-w-6xl mx-auto w-full px-4 animate-fade-in pb-20 relative">
         <div 
-            style={{
+            style={showMiniPlayer && currentTrack?.type === 'youtube' && isPlaying ? {
                 position: 'fixed',
-                bottom: '1px',
-                right: '1px',
-                width: '1px',
-                height: '1px',
-                opacity: '0.01',
+                bottom: '24px',
+                right: '24px',
+                width: '280px',
+                height: '160px',
+                opacity: '1',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                border: '2px solid rgba(99, 102, 241, 0.5)',
+                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)',
+                zIndex: 50,
+                transition: 'all 0.3s ease-in-out',
+                pointerEvents: 'auto',
+            } : {
+                position: 'fixed',
+                left: '-9999px',
+                top: '-9999px',
+                width: '280px',
+                height: '160px',
+                opacity: '1',
                 overflow: 'hidden',
                 zIndex: -50,
                 pointerEvents: 'none',
+                transition: 'all 0.3s ease-in-out',
             }}
         >
             <div id="youtube-player-hidden" className="w-full h-full"></div>
@@ -1326,6 +1347,19 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                              {isNarratingRef.current && <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm"><Mic2 size={48} className="text-cyan-400 animate-pulse" /></div>}
                         </div>
                         <h3 className="text-xl font-bold text-white mb-1 text-center line-clamp-1 max-w-md">{currentTrack?.name || (isPlaying ? "Carregando..." : "Aguardando...")}</h3>
+                         {currentTrack?.type === 'youtube' && isPlaying && (
+                            <button 
+                                onClick={() => setShowMiniPlayer(!showMiniPlayer)}
+                                className={`mt-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 border hover:scale-105 active:scale-95 shadow-sm ${
+                                    showMiniPlayer 
+                                        ? 'bg-red-500/20 text-red-300 border-red-500/30' 
+                                        : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
+                                }`}
+                            >
+                                <Youtube size={12} />
+                                {showMiniPlayer ? 'Ocultar Mini-Player' : 'Mostrar Mini-Player'}
+                            </button>
+                         )}
                         
                         <div className="flex items-center gap-6 mt-6">
                              <button onClick={() => setLoopMode(prev => prev === 'off' ? 'all' : prev === 'all' ? 'one' : 'off')} className={`p-3 rounded-full transition-all ${loopMode !== 'off' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-500 hover:text-white'}`}>
