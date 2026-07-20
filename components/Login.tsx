@@ -205,18 +205,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               <Phone size={20} className="group-hover:scale-110 transition-transform text-white" />
               Login com Telefone
             </button>
-
-            <div className="relative my-6 flex items-center justify-center">
-              <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-slate-800" /></div>
-              <span className="relative bg-slate-950 px-3 text-[10px] text-slate-500 font-bold uppercase tracking-widest">Ou acesse offline</span>
-            </div>
-
-            <button 
-              onClick={() => onLogin('admin', 'limadan389@gmail.com')}
-              className="w-full group font-bold text-xs py-3.5 rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2 bg-gradient-to-r from-teal-600/20 to-emerald-600/20 hover:from-teal-600/30 hover:to-emerald-600/30 text-teal-300 border border-teal-500/20 hover:border-teal-500/40"
-            >
-              Acessar em Modo de Demonstração (Admin)
-            </button>
           </div>
         )}
 

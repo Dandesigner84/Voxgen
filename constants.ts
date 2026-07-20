@@ -59,4 +59,4 @@ export const DEFAULT_TEXT = "Olá! Eu sou a VoxGen AI. Como posso ajudar com sua
 
 export const CALIBRATION_TEXT = "Ao registrar minha voz neste estúdio de inteligência artificial, declaro que estou ciente de que as amostras coletadas serão utilizadas exclusivamente para o treinamento de modelos de síntese de voz personalizados.";
 
-export const VIGNETTE_TEXT = "Já imaginou criar narrações profissionais e escolher a playlist ideal com apenas um clique? Com a VoxGen AI Studio isso é realidade! Crie locuções para lojas, carros de som, redes sociais, eventos e até campanhas eleitorais com rapidez, qualidade e Inteligência Artificial. Escolha a voz, o estilo, a trilha sonora e deixe a VoxGen fazer o resto. Economize tempo, reduza custos e impressione seu público. Saiba mais pelo WhatsApp: onze, nove, vinte e um, nove dois, nove dois, quatro três. VoxGen AI Studio. Dando voz às suas ideias com Inteligência Artificial!";
+export const VIGNETTE_TEXT = "Você está ouvindo a programação inteligente alimentada pela VoxGen AI. Para anúncios e parcerias, entre em contato pelo WhatsApp: 11, 9, 21, 92, 92, 43.";
