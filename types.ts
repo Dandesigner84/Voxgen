@@ -179,3 +179,97 @@ export interface UserFeedback {
   isHighlighted: boolean;
   createdAt: number;
 }
+
+export interface SmartPlayPreferences {
+  userId: string;
+  selectedCategories: string[];
+  language: 'pt' | 'en' | 'es';
+  scope: 'global' | 'regional';
+  locutionStyle: 'jornal' | 'podcast' | 'radio_fm' | 'jovem' | 'formal' | 'casual' | 'humor' | 'inspirador' | 'institucional';
+  voiceId: string;
+  intervalType: 'tracks' | 'minutes' | 'smart';
+  intervalValue: number; // e.g. 2, 3, 5 tracks or 10, 20, 30, 60 minutes
+  duration: number; // e.g. 15, 30, 45, 60, 90 seconds
+  blockedThemes: string[];
+  isPremiumEnabled: boolean;
+  updatedAt: number;
+}
+
+export interface NewsCache {
+  id: string;
+  category: string;
+  title: string;
+  summary: string;
+  source: string;
+  language: string;
+  scope: string;
+  createdAt: number;
+}
+
+export interface ContentBlock {
+  id: string;
+  category: string;
+  title: string;
+  text: string;
+  audioBase64: string;
+  voice: string;
+  style: string;
+  language: string;
+  duration: number; // seconds
+  createdAt: number;
+}
+
+export interface PlaybackHistory {
+  id: string;
+  userId: string;
+  blockId: string;
+  category: string;
+  action: 'play' | 'like' | 'dislike' | 'skip' | 'never_show_again';
+  playedAt: number;
+  durationPlayed?: number;
+}
+
+export interface GeneratedNarration {
+  id: string;
+  userId: string;
+  text: string;
+  voice: string;
+  audioBase64: string;
+  createdAt: number;
+}
+
+export interface PlaylistInsertion {
+  id: string;
+  userId: string;
+  blockId: string;
+  insertedAt: number;
+  played: boolean;
+}
+
+export interface NewsSource {
+  id: string;
+  name: string;
+  url: string;
+  category: string;
+  trusted: boolean;
+}
+
+export interface SmartPlayCategory {
+  id: string;
+  name: string;
+  icon?: string;
+}
+
+export interface VoiceProfile {
+  id: string;
+  name: string;
+  gender: 'male' | 'female' | 'neutral';
+  tone: string;
+}
+
+export interface ContentHistory {
+  id: string;
+  userId: string;
+  contentId: string;
+  playedAt: number;
+}

@@ -162,7 +162,12 @@ const AppContent: React.FC = () => {
   }, []);
 
   const handleLogin = (role: UserRole, email: string) => {
-     // The setUser is already handled via onAuthStateChanged with full data
+     setUser({
+         email: email,
+         role: role,
+         companyName: 'VoxGen Inc',
+         isProfileComplete: true
+     });
      if (role === 'admin' || email === 'limadan389@gmail.com') {
          setMode(AppMode.Admin);
      } else {
