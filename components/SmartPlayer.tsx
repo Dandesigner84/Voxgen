@@ -66,6 +66,11 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
   const hasPlayedVignetteRef = useRef(false);
   const vignetteBufferRef = useRef<AudioBuffer | null>(null);
 
+  // Buffer preload and state control additions
+  const [isBuffering, setIsBuffering] = useState(false);
+  const preloadedCacheRef = useRef<Record<string, { blobUrl?: string, buffer?: AudioBuffer, status: 'loading' | 'loaded' | 'error' }>>({});
+  const lastLoadedSrcRef = useRef<string | null>(null);
+
   const [loopMode, setLoopMode] = useState<'off' | 'all' | 'one'>('all');
   const [isShuffle, setIsShuffle] = useState(false);
   const [webInput, setWebInput] = useState('');
@@ -104,8 +109,27 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
   const workerRef = useRef<Worker | null>(null);
   const narrationSourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const fadeIntervalRef = useRef<number | null>(null);
+  const fadeAudioElementIntervalRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const narrationsSinceVignetteRef = useRef(0);
+  const wakeLockRef = useRef<any>(null);
+
+  const requestWakeLock = async () => {
+    try {
+      if ('wakeLock' in navigator && (navigator as any).wakeLock) {
+        wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+      }
+    } catch (err) {
+      console.warn("[WakeLock] Lock de tela não suportado ou bloqueado", err);
+    }
+  };
+
+  const releaseWakeLock = () => {
+    if (wakeLockRef.current) {
+      try { wakeLockRef.current.release(); } catch (e) { void e; }
+      wakeLockRef.current = null;
+    }
+  };
 
   const { isIOS } = usePlatformDetection();
   const [isPremium, setIsPremium] = useState(false);
@@ -254,12 +278,27 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
           if (ctx.state === 'running') ctx.suspend();
           pauseTrack();
           stopScheduler();
+          releaseWakeLock();
+          if ('mediaSession' in navigator) {
+              navigator.mediaSession.playbackState = 'paused';
+          }
           return;
       }
 
       if (ctx.state === 'suspended') ctx.resume();
 
+      // Desbloqueia ambos os elementos de áudio no gesto do usuário para execução sem restrição em segundo plano
+      if (narrationAudioElRef.current) {
+          narrationAudioElRef.current.play().then(() => {
+              narrationAudioElRef.current?.pause();
+          }).catch(() => {});
+      }
+
       setIsPlaying(true);
+      requestWakeLock();
+      if ('mediaSession' in navigator) {
+          navigator.mediaSession.playbackState = 'playing';
+      }
 
       // Lógica de Vinheta Aleatória: Tenta tocar se for a primeira vez ou random 30%
       const shouldPlayVignette = (getRandomFloat() > 0.7 || !hasPlayedVignetteRef.current);
@@ -362,12 +401,86 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       }
   }
 
+  const preloadTrack = async (track: Track) => {
+      if (!track || track.type !== 'file' || !track.src) return;
+      if (track.src.startsWith('blob:') || track.src.startsWith('data:')) return;
+      
+      const cache = preloadedCacheRef.current;
+      if (cache[track.src]) return;
+      
+      cache[track.src] = { status: 'loading' };
+      console.log(`[SmartPlayer] [Preload] Começando pré-carregamento em background para: ${track.name}`);
+      
+      try {
+          const response = await fetch(track.src);
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          const arrayBuffer = await response.arrayBuffer();
+          
+          // 1. Cria Blob URL para compatibilidade nativa de segundo plano (HTML5 Audio)
+          const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
+          const blobUrl = URL.createObjectURL(blob);
+          
+          // 2. Tenta decodificar como AudioBuffer para modo Web Audio (se suportado e ativo)
+          let buffer: AudioBuffer | undefined = undefined;
+          try {
+              const ctx = initAudioContext();
+              const bufferCopy = arrayBuffer.slice(0);
+              buffer = await ctx.decodeAudioData(bufferCopy);
+          } catch (decodeErr) {
+              console.warn(`[SmartPlayer] [Preload] Não pôde decodificar AudioBuffer para ${track.name}`, decodeErr);
+          }
+          
+          cache[track.src] = {
+              blobUrl,
+              buffer,
+              status: 'loaded'
+          };
+          console.log(`[SmartPlayer] [Preload] Pré-carregamento concluído com sucesso para: ${track.name}`);
+      } catch (err) {
+          console.error(`[SmartPlayer] [Preload] Erro ao pré-carregar trilha ${track.name}:`, err);
+          cache[track.src] = { status: 'error' };
+      }
+  };
+
+  const preloadNextTracks = () => {
+      if (playlist.length === 0) return;
+      
+      // Pré-carrega a próxima faixa
+      const nextIndex = (currentTrackIndex + 1) % playlist.length;
+      const nextTrack = playlist[nextIndex];
+      if (nextTrack) {
+          preloadTrack(nextTrack);
+      }
+      
+      // Pré-carrega a faixa subsequente para maior robustez
+      const thirdIndex = (currentTrackIndex + 2) % playlist.length;
+      const thirdTrack = playlist[thirdIndex];
+      if (thirdTrack) {
+          preloadTrack(thirdTrack);
+      }
+  };
+
   function playTrack(track: Track) {
       if (!track || !track.src || isVignettePlaying) return;
+      
+      // Se realmente trocou de faixa, reinicia o cronômetro para dar espaço para o início da nova música!
+      if (lastLoadedSrcRef.current !== track.src) {
+          const now = Date.now();
+          nextNarrationTimeRef.current = now + (intervalSecondsRef.current * 1000);
+          hasFadedOutRef.current = false;
+          // Garante que o volume comece no máximo
+          if (audioElRef.current) audioElRef.current.volume = 0.7;
+          if (trackGainNodeRef.current) {
+              const ctx = initAudioContext();
+              trackGainNodeRef.current.gain.cancelScheduledValues(ctx.currentTime);
+              trackGainNodeRef.current.gain.setValueAtTime(0.7, ctx.currentTime);
+          }
+      }
       
       // Pausar outros meios para evitar sobreposição
       if (track.type !== 'file') {
           audioElRef.current?.pause();
+          lastLoadedSrcRef.current = null;
       }
       if (track.type !== 'youtube') {
           try { ytPlayerRef.current?.pauseVideo(); } catch (e) { void e; }
@@ -381,25 +494,54 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       
       if (track.type === 'file') {
           if (audioElRef.current) {
-              if (audioElRef.current.src !== track.src) audioElRef.current.src = track.src;
+              const cached = preloadedCacheRef.current[track.src];
+              const playSrc = (cached && cached.status === 'loaded' && cached.blobUrl) ? cached.blobUrl : track.src;
+              
+              if (lastLoadedSrcRef.current !== track.src) {
+                  audioElRef.current.src = playSrc;
+                  lastLoadedSrcRef.current = track.src;
+                  audioElRef.current.load();
+              }
+              
               if (trackGainNodeRef.current) {
                   // Respeita se houver uma narração em curso
+                  audioElRef.current.volume = 1.0; // Web Audio controlará o ganho real
                   trackGainNodeRef.current.gain.value = isNarratingRef.current ? 0.04 : 0.7;
               } else {
                   // Direct background mode
                   audioElRef.current.volume = isNarratingRef.current ? 0.04 : 0.7;
               }
               
+              // Estado de buffering/carregamento robusto
+              audioElRef.current.onwaiting = () => {
+                  setIsBuffering(true);
+              };
+              audioElRef.current.onplaying = () => {
+                  setIsBuffering(false);
+              };
+              audioElRef.current.oncanplay = () => {
+                  setIsBuffering(false);
+              };
+              
               audioElRef.current.onerror = () => {
                   console.error("Erro no arquivo de áudio, pulando...");
+                  setIsBuffering(false);
                   handleNextTrack();
               };
               
-              audioElRef.current.play().catch(e => {
+              audioElRef.current.play().then(() => {
+                  setIsBuffering(false);
+                  preloadNextTracks();
+              }).catch(e => {
                   console.error("Can't play audio file", e);
+                  setIsBuffering(false);
                   handleNextTrack();
               });
-              audioElRef.current.onended = handleNextTrack;
+              
+              audioElRef.current.onended = () => {
+                  setIsBuffering(false);
+                  handleNextTrack();
+              };
           }
       } else if (track.type === 'youtube') {
           if (ytPlayerRef.current && isYtReady) {
@@ -553,24 +695,93 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
   };
 
   useEffect(() => {
-    // Media Session API for background media display
-    if ('mediaSession' in navigator && currentTrack) {
+    // Media Session API for background media control & OS lockscreen integration
+    if (!('mediaSession' in navigator)) return;
+
+    if (currentTrack) {
       navigator.mediaSession.metadata = new MediaMetadata({
-        title: currentTrack.name,
+        title: currentTrack.name || 'VoxGen Radio',
         artist: 'VoxGen AI Player',
-        album: 'Radio Studio',
+        album: isCorporateMode ? (companyName || 'Corporate Player') : 'Radio AI Studio',
         artwork: [
-          { src: 'https://ais-pre-22xne2xutkbprprvr3s6kr-207718158227.us-east1.run.app/icon.svg', sizes: '512x512', type: 'image/svg+xml' }
+          { src: '/icon.svg', sizes: '512x512', type: 'image/svg+xml' }
         ]
       });
-
-      navigator.mediaSession.setActionHandler('play', handleMainPlay);
-      navigator.mediaSession.setActionHandler('pause', handleMainPlay);
-      navigator.mediaSession.setActionHandler('nexttrack', handleNextTrack);
-      navigator.mediaSession.setActionHandler('previoustrack', () => {
-        if (currentTrackIndex > 0) setCurrentTrackIndex(prev => prev - 1);
-      });
     }
+
+    navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+
+    const handlePlay = () => {
+      if (!isPlayingRef.current) handleMainPlay();
+    };
+    const handlePause = () => {
+      if (isPlayingRef.current) handleMainPlay();
+    };
+    const handleNext = () => {
+      handleNextTrack();
+    };
+    const handlePrev = () => {
+      if (currentTrackIndex > 0) setCurrentTrackIndex(prev => prev - 1);
+      else if (playlist.length > 0) setCurrentTrackIndex(playlist.length - 1);
+    };
+    const handleSeekTo = (details: MediaSessionActionDetails) => {
+      if (details.seekTime !== undefined && audioElRef.current) {
+        audioElRef.current.currentTime = details.seekTime;
+      }
+    };
+    const handleSeekBackward = (details: MediaSessionActionDetails) => {
+      const skipTime = details.seekOffset || 10;
+      if (audioElRef.current) {
+        audioElRef.current.currentTime = Math.max(audioElRef.current.currentTime - skipTime, 0);
+      }
+    };
+    const handleSeekForward = (details: MediaSessionActionDetails) => {
+      const skipTime = details.seekOffset || 10;
+      if (audioElRef.current) {
+        audioElRef.current.currentTime = Math.min(
+          audioElRef.current.currentTime + skipTime,
+          audioElRef.current.duration || 0
+        );
+      }
+    };
+
+    try { navigator.mediaSession.setActionHandler('play', handlePlay); } catch (e) { void e; }
+    try { navigator.mediaSession.setActionHandler('pause', handlePause); } catch (e) { void e; }
+    try { navigator.mediaSession.setActionHandler('stop', handlePause); } catch (e) { void e; }
+    try { navigator.mediaSession.setActionHandler('previoustrack', handlePrev); } catch (e) { void e; }
+    try { navigator.mediaSession.setActionHandler('nexttrack', handleNext); } catch (e) { void e; }
+    try { navigator.mediaSession.setActionHandler('seekto', handleSeekTo); } catch (e) { void e; }
+    try { navigator.mediaSession.setActionHandler('seekbackward', handleSeekBackward); } catch (e) { void e; }
+    try { navigator.mediaSession.setActionHandler('seekforward', handleSeekForward); } catch (e) { void e; }
+  }, [currentTrack, isPlaying, currentTrackIndex, playlist.length]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        if (isPlayingRef.current) {
+          requestWakeLock();
+          try {
+            const ctx = initAudioContext();
+            if (ctx.state === 'suspended') ctx.resume();
+          } catch (e) { void e; }
+
+          if (audioElRef.current && audioElRef.current.paused && currentTrack?.type === 'file') {
+            audioElRef.current.play().catch(() => {});
+          }
+        }
+      } else {
+        if (isPlayingRef.current) {
+          if ('mediaSession' in navigator) {
+            navigator.mediaSession.playbackState = 'playing';
+          }
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [currentTrack]);
 
   function startScheduler() {
@@ -596,8 +807,11 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
           
           // Só processa ducking e play se estiver tocando e não estiver em vinheta
           if (isPlayingRef.current && !isVignettePlayingRef.current) {
-              if (remainingMs <= 3500 && remainingMs > 0 && !hasFadedOutRef.current) {
-                   lowerVolume(3.0);
+              const fadeDuration = intervalSecondsRef.current < 15 ? 0.8 : 3.0;
+              const preDelayMs = intervalSecondsRef.current < 15 ? 1000 : 3500;
+              
+              if (remainingMs <= preDelayMs && remainingMs > 0 && !hasFadedOutRef.current) {
+                   lowerVolume(fadeDuration);
                    hasFadedOutRef.current = true;
               }
               
@@ -623,6 +837,10 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
         workerRef.current.postMessage({ action: 'stop' });
         workerRef.current.terminate();
         workerRef.current = null;
+    }
+    if (fadeAudioElementIntervalRef.current) {
+        window.clearInterval(fadeAudioElementIntervalRef.current);
+        fadeAudioElementIntervalRef.current = null;
     }
   }
 
@@ -817,6 +1035,11 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
   const fadeAudioElementVolume = (audio: HTMLAudioElement, endVol: number, durationMs: number) => {
       if (!audio) return;
+      if (fadeAudioElementIntervalRef.current) {
+          window.clearInterval(fadeAudioElementIntervalRef.current);
+          fadeAudioElementIntervalRef.current = null;
+      }
+      
       const startVol = audio.volume;
       const steps = 20;
       const stepTime = durationMs / steps;
@@ -824,17 +1047,25 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       let currentVol = startVol;
       
       const intervalId = window.setInterval(() => {
-          if (!audio || audio.paused) {
-              clearInterval(intervalId);
+          if (!audio) {
+              if (fadeAudioElementIntervalRef.current === intervalId) {
+                  fadeAudioElementIntervalRef.current = null;
+              }
+              window.clearInterval(intervalId);
               return;
           }
           currentVol += volStep;
           if ((volStep > 0 && currentVol >= endVol) || (volStep < 0 && currentVol <= endVol)) {
               currentVol = endVol;
-              clearInterval(intervalId);
+              window.clearInterval(intervalId);
+              if (fadeAudioElementIntervalRef.current === intervalId) {
+                  fadeAudioElementIntervalRef.current = null;
+              }
           }
           audio.volume = Math.max(0, Math.min(1, currentVol));
       }, stepTime);
+      
+      fadeAudioElementIntervalRef.current = intervalId;
   };
 
   const lowerVolume = (duration: number = 3.0) => {
@@ -846,9 +1077,9 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
           trackGainNodeRef.current.gain.cancelScheduledValues(ctx.currentTime);
           trackGainNodeRef.current.gain.setValueAtTime(trackGainNodeRef.current.gain.value, ctx.currentTime);
           trackGainNodeRef.current.gain.linearRampToValueAtTime(0.04, ctx.currentTime + duration);
-      }
-      
-      if (audioElRef.current) {
+          
+          if (audioElRef.current) audioElRef.current.volume = 1.0; // Mantém o volume do elemento em 1.0 quando há ganho WebAudio
+      } else if (audioElRef.current) {
           fadeAudioElementVolume(audioElRef.current, 0.04, duration * 1000);
       }
       
@@ -869,16 +1100,16 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
           trackGainNodeRef.current.gain.cancelScheduledValues(ctx.currentTime);
           trackGainNodeRef.current.gain.setValueAtTime(trackGainNodeRef.current.gain.value, ctx.currentTime);
           trackGainNodeRef.current.gain.linearRampToValueAtTime(0.7, ctx.currentTime + duration);
-      }
-      
-      if (audioElRef.current) {
+          
+          if (audioElRef.current) audioElRef.current.volume = 1.0; // Mantém o volume do elemento em 1.0 quando há ganho WebAudio
+      } else if (audioElRef.current) {
           fadeAudioElementVolume(audioElRef.current, 0.7, duration * 1000);
       }
       
       if (ytPlayerRef.current && typeof ytPlayerRef.current.getVolume === 'function') {
           try {
             const currentVol = ytPlayerRef.current.getVolume();
-            fadeYouTubeVolume(currentVol, 70, duration * 1000); // 70% is safer for YouTube to avoid its internal clipping
+            fadeYouTubeVolume(currentVol, 70, duration * 1000);
           } catch (e) { void e; }
       }
   };
@@ -1113,6 +1344,41 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
     narrationAudio.crossOrigin = "anonymous";
     narrationAudioElRef.current = narrationAudio;
 
+    audio.ontimeupdate = () => {
+      if (!isPlayingRef.current || isVignettePlayingRef.current) return;
+      
+      const currentTime = Date.now();
+      const remainingMs = nextNarrationTimeRef.current - currentTime;
+      
+      const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
+      setNextNarrationTimeDisplay(remainingSec > 60 
+        ? `${Math.floor(remainingSec/60)}m ${remainingSec%60}s` 
+        : `${remainingSec}s`
+      );
+      
+      const fadeDuration = intervalSecondsRef.current < 15 ? 0.8 : 3.0;
+      const preDelayMs = intervalSecondsRef.current < 15 ? 1000 : 3500;
+      
+      if (remainingMs <= preDelayMs && remainingMs > 0 && !hasFadedOutRef.current) {
+        lowerVolume(fadeDuration);
+        hasFadedOutRef.current = true;
+      }
+      
+      if (currentTime >= nextNarrationTimeRef.current && !isNarratingRef.current) {
+        playNarration();
+      }
+
+      if ('mediaSession' in navigator && audio.duration) {
+        try {
+          navigator.mediaSession.setPositionState({
+            duration: audio.duration || 0,
+            playbackRate: audio.playbackRate || 1,
+            position: audio.currentTime || 0
+          });
+        } catch (e) { void e; }
+      }
+    };
+
     if (!isBackgroundPlayEnabled) {
         try {
             const trackSource = ctx.createMediaElementSource(audio);
@@ -1218,6 +1484,14 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Pré-carrega a próxima faixa automaticamente ao mudar de faixa ou alterar playlist
+  useEffect(() => {
+    if (playlist.length > 0) {
+      preloadNextTracks();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTrackIndex, playlist]);
+
   useEffect(() => {
     if (!currentTrack) return;
     if (isPlaying && !isVignettePlaying) {
@@ -1303,6 +1577,12 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                 <Radio className="text-cyan-400" /> Smart Player
                 {isCorporateMode && <span className="text-xs bg-indigo-600 text-white px-2 py-1 rounded-full uppercase ml-2">Modo Empresa</span>}
             </h2>
+            <div className="flex items-center justify-center gap-2 mt-2">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-sm">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    Segundo Plano Ativo (PWA / Tela Bloqueada)
+                </span>
+            </div>
         </div>
 
         <div className="bg-slate-800/50 border border-slate-700 rounded-3xl p-8 mb-8 relative overflow-hidden min-h-[400px] flex flex-col items-center justify-center transition-all duration-500 group">
@@ -1346,7 +1626,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                              ) : <div className="text-slate-600">Sem Faixa</div>}
                              {isNarratingRef.current && <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm"><Mic2 size={48} className="text-cyan-400 animate-pulse" /></div>}
                         </div>
-                        <h3 className="text-xl font-bold text-white mb-1 text-center line-clamp-1 max-w-md">{currentTrack?.name || (isPlaying ? "Carregando..." : "Aguardando...")}</h3>
+                        <h3 className="text-xl font-bold text-white mb-1 text-center line-clamp-1 max-w-md">{isBuffering ? "Carregando / Bufferizando..." : (currentTrack?.name || (isPlaying ? "Carregando..." : "Aguardando..."))}</h3>
                          {currentTrack?.type === 'youtube' && isPlaying && (
                             <button 
                                 onClick={() => setShowMiniPlayer(!showMiniPlayer)}

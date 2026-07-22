@@ -55,5 +55,14 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then((reg) => console.log('[VoxGen PWA] Service Worker registrado com sucesso:', reg.scope))
+            .catch((err) => console.warn('[VoxGen PWA] Falha ao registrar Service Worker:', err));
+        });
+      }
+    </script>
   </body>
 </html>
