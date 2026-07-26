@@ -40,7 +40,7 @@ const getGeminiClient = () => {
 
 // Available Categories List
 export const SMART_PLAY_CATEGORIES = [
-  "Notícias", "Inteligência Artificial", "Tecnologia", "Ciência", "Cinema", "Séreas", "Games", 
+  "📰 Boletins IA", "Notícias", "Inteligência Artificial", "Tecnologia", "Ciência", "Cinema", "Séreas", "Games", 
   "Futebol", "Esportes", "Economia", "Mercado Financeiro", "Marketing", "Empreendedorismo", 
   "Saúde", "Bem-estar", "Automóveis", "Trânsito", "Autoescolas", "Agronegócio", "Música", 
   "Gospel", "Notícias Cristãs", "Versículo do Dia", "Reflexão Cristã", "Frases Motivacionais", 

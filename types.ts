@@ -273,3 +273,71 @@ export interface ContentHistory {
   contentId: string;
   playedAt: number;
 }
+
+export interface BulletinConfig {
+  id?: string;
+  userId: string;
+  isActive: boolean;
+  niche: string;
+  customNiche?: string;
+  city: string;
+  state: string;
+  country: string;
+  intervalMinutes: number;
+  newsCount: number;
+  maxDurationSeconds: number;
+  voice: string;
+  locutionStyle: string;
+  language: 'pt' | 'en' | 'es';
+  temperature: number;
+  bgMusicType: 'library' | 'upload' | 'youtube' | 'none';
+  bgMusicId?: string;
+  bgMusicTitle?: string;
+  bgMusicUrl?: string;
+  bgMusicStartSec?: number;
+  bgMusicEndSec?: number;
+  voiceVolume: number;
+  bgMusicVolume: number;
+  duckingIntensity: number;
+  updatedAt: number;
+}
+
+export interface BulletinBackgroundMusic {
+  id: string;
+  userId: string;
+  title: string;
+  type: 'library' | 'upload' | 'youtube';
+  sourceUrl: string;
+  thumbnailUrl?: string;
+  duration?: number;
+  startSec?: number;
+  endSec?: number;
+  createdAt: number;
+}
+
+export interface BulletinHistoryItem {
+  id: string;
+  userId: string;
+  dateTime: number;
+  niche: string;
+  city: string;
+  state: string;
+  country: string;
+  sources: string[];
+  voiceUsed: string;
+  duration: number;
+  generationStatus: 'Sucesso' | 'Em Andamento' | 'Erro';
+  errorMessage?: string;
+  playbackStatus: 'Na Fila' | 'Reproduzido' | 'Agendado';
+  title: string;
+  script: string;
+  audioBase64?: string;
+}
+
+export interface BulletinUsage {
+  userId: string;
+  dateStr: string;
+  count: number;
+  dailyLimit: number;
+}
+

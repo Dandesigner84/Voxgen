@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, Sparkles, Loader2, PlayCircle, ArrowLeft, Heart, Smartphone, Play, Square, Volume2, LogOut, CheckCircle, XCircle, ShieldCheck } from 'lucide-react';
+import { Mic, Sparkles, Loader2, PlayCircle, ArrowLeft, Heart, Smartphone, Play, Square, Volume2, LogOut, CheckCircle, XCircle, ShieldCheck, Newspaper } from 'lucide-react';
 import VoiceControls from './components/VoiceControls';
 import TextInput from './components/TextInput';
 import AudioList from './components/AudioList';
@@ -9,6 +9,7 @@ import MusicStudio from './components/MusicStudio';
 import AvatarStudio from './components/AvatarStudio';
 import SFXStudio from './components/SFXStudio';
 import SmartPlayer from './components/SmartPlayer';
+import SmartBulletinStudio from './components/SmartBulletinStudio';
 import MangaStudio from './components/MangaStudio';
 import VoiceCloningStudio from './components/VoiceCloningStudio';
 import PDFAudioModule from './components/PDFAudioModule';
@@ -50,6 +51,7 @@ const AppContent: React.FC = () => {
   const [isAddingSFX, setIsAddingSFX] = useState(false);
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
   const [globalGain, setGlobalGain] = useState(1.0);
+  const [narrationTab, setNarrationTab] = useState<'manual' | 'bulletin'>('manual');
   
   const previewSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
@@ -479,28 +481,64 @@ const AppContent: React.FC = () => {
          {mode === AppMode.Home && <Home onSelectMode={setMode} userRole={user.role} userEmail={user.email} />}
          {mode === AppMode.Admin && <AdminPanel userRole={user.role} userEmail={user.email} />}
          {mode === AppMode.Narration && (
-            <div className="max-w-6xl mx-auto px-4">
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    <div className="lg:col-span-7 space-y-6">
-                        <VoiceControls selectedVoice={selectedVoice} onVoiceChange={setSelectedVoice} selectedTone={selectedTone} onToneChange={setSelectedTone} useMusic={useMusic} onMusicChange={setUseMusic} userEmail={user.email} />
-                        <div className="min-h-[200px]">
-                            <TextInput value={text} onChange={setText} disabled={processing.isGeneratingAudio} selectedTone={selectedTone} onOptimize={handleOptimizeText} isOptimizing={processing.isEnhancing} onAutoSFX={handleAutoSFX} isAddingSFX={isAddingSFX} />
-                        </div>
-                        <div className="flex gap-4">
-                            <button onClick={handlePreviewNarration} disabled={processing.isGeneratingAudio || !text.trim()} className={`flex-1 py-4 rounded-xl font-bold flex justify-center items-center gap-2 border transition-all ${isPlayingPreview ? 'bg-red-500/20 border-red-500 text-red-200' : 'bg-slate-800 border-slate-700 text-indigo-300'}`}>
-                                {isPlayingPreview ? <><Square size={18} fill="currentColor" /> Parar</> : <><Play size={18} /> Preview</>}
-                            </button>
-                            <button onClick={handleGenerateNarration} disabled={processing.isGeneratingAudio || !text.trim() || isPlayingPreview} className="flex-[2] py-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold flex justify-center items-center gap-2 shadow-lg disabled:opacity-50">
-                                {processing.isGeneratingAudio ? "Gerando..." : <><Sparkles size={18}/> Gerar Áudio</>}
-                            </button>
-                        </div>
-                    </div>
-                    <div className="lg:col-span-5">
-                        <div className="bg-slate-900/50 rounded-2xl p-4 border border-slate-800 h-[500px] overflow-y-auto custom-scrollbar">
-                            <AudioList items={history} audioContext={audioContext} />
-                        </div>
-                    </div>
+            <div className="max-w-6xl mx-auto px-4 space-y-6">
+                {/* TAB SWITCHER FOR VOZ DO NARRADOR */}
+                <div className="flex justify-center mb-4">
+                  <div className="bg-slate-900/90 border border-indigo-500/30 p-1.5 rounded-2xl flex items-center gap-2 shadow-xl backdrop-blur-md">
+                    <button
+                      onClick={() => setNarrationTab('manual')}
+                      className={`px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all ${
+                        narrationTab === 'manual'
+                          ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-lg shadow-indigo-500/30'
+                          : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                      }`}
+                    >
+                      <Mic size={16} /> 🎙️ Locução & Roteiro Manual
+                    </button>
+
+                    <button
+                      onClick={() => setNarrationTab('bulletin')}
+                      className={`px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all ${
+                        narrationTab === 'bulletin'
+                          ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white shadow-lg shadow-cyan-500/30'
+                          : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                      }`}
+                    >
+                      <Newspaper size={16} /> 📰 Boletim Inteligente IA
+                    </button>
+                  </div>
                 </div>
+
+                {narrationTab === 'manual' ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                      <div className="lg:col-span-7 space-y-6">
+                          <VoiceControls selectedVoice={selectedVoice} onVoiceChange={setSelectedVoice} selectedTone={selectedTone} onToneChange={setSelectedTone} useMusic={useMusic} onMusicChange={setUseMusic} userEmail={user.email} />
+                          <div className="min-h-[200px]">
+                              <TextInput value={text} onChange={setText} disabled={processing.isGeneratingAudio} selectedTone={selectedTone} onOptimize={handleOptimizeText} isOptimizing={processing.isEnhancing} onAutoSFX={handleAutoSFX} isAddingSFX={isAddingSFX} />
+                          </div>
+                          <div className="flex gap-4">
+                              <button onClick={handlePreviewNarration} disabled={processing.isGeneratingAudio || !text.trim()} className={`flex-1 py-4 rounded-xl font-bold flex justify-center items-center gap-2 border transition-all ${isPlayingPreview ? 'bg-red-500/20 border-red-500 text-red-200' : 'bg-slate-800 border-slate-700 text-indigo-300'}`}>
+                                  {isPlayingPreview ? <><Square size={18} fill="currentColor" /> Parar</> : <><Play size={18} /> Preview</>}
+                              </button>
+                              <button onClick={handleGenerateNarration} disabled={processing.isGeneratingAudio || !text.trim() || isPlayingPreview} className="flex-[2] py-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold flex justify-center items-center gap-2 shadow-lg disabled:opacity-50">
+                                  {processing.isGeneratingAudio ? "Gerando..." : <><Sparkles size={18}/> Gerar Áudio</>}
+                              </button>
+                          </div>
+                      </div>
+                      <div className="lg:col-span-5">
+                          <div className="bg-slate-900/50 rounded-2xl p-4 border border-slate-800 h-[500px] overflow-y-auto custom-scrollbar">
+                              <AudioList items={history} audioContext={audioContext} />
+                          </div>
+                      </div>
+                  </div>
+                ) : (
+                  <SmartBulletinStudio
+                    audioContext={audioContext}
+                    initAudioContext={initAudioContext}
+                    userEmail={user.email}
+                    userId={auth.currentUser?.uid || 'guest_user'}
+                  />
+                )}
             </div>
          )}
          {mode === AppMode.Music && <MusicStudio audioContext={audioContext} initAudioContext={initAudioContext} />}
