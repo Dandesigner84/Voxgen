@@ -6,7 +6,7 @@ import { isSmartPlayerUnlocked } from '../services/monetizationService';
 import { usePlatformDetection } from '../hooks/usePlatformDetection';
 import { getCorporatePlaylist, saveCorporatePlaylist } from '../services/corporateService';
 import { generateSpeech } from '../services/geminiService';
-import { buscarYouTube, YouTubeSearchResult } from '../services/youtubeService';
+import { buscarYouTube, YouTubeSearchResult, getYouTubeMetadata, extractYouTubeVideoId } from '../services/youtubeService';
 import { decodeAudioData, audioBufferToWav } from '../utils/audioUtils';
 import { VIGNETTE_TEXT } from '../constants';
 import { getAllFeedbacks } from '../services/analyticsService';
@@ -1128,14 +1128,28 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       }, stepTime);
   };
 
-  const addWebLink = () => {
+  const addWebLink = async () => {
       const trimmedInput = webInput.trim();
-      const ytRegExp = /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=|shorts\/|live\/)|youtu\.be\/)([^"&?/\s]{11})/;
+      const videoId = extractYouTubeVideoId(trimmedInput);
       const spotifyRegExp = /open\.spotify\.com\/(track|album|playlist|episode)\/([a-zA-Z0-9]+)/;
-      if (trimmedInput.match(ytRegExp)) {
-          const id = trimmedInput.match(ytRegExp)![1];
-          setPlaylist(prev => [...prev, { id: crypto.randomUUID(), type: 'youtube', name: `YouTube Faixa (${id})`, src: id, thumbnail: `https://img.youtube.com/vi/${id}/0.jpg` }]);
+
+      if (videoId) {
+          const trackId = crypto.randomUUID();
+          setPlaylist(prev => [...prev, { 
+              id: trackId, 
+              type: 'youtube', 
+              name: `YouTube Faixa (${videoId})`, 
+              src: videoId, 
+              thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` 
+          }]);
           setWebInput('');
+
+          try {
+              const meta = await getYouTubeMetadata(trimmedInput);
+              if (meta && meta.title) {
+                  setPlaylist(prev => prev.map(t => t.id === trackId ? { ...t, name: meta.title, thumbnail: meta.thumbnail } : t));
+              }
+          } catch (e) { void e; }
       } else if (trimmedInput.match(spotifyRegExp)) {
           const match = trimmedInput.match(spotifyRegExp)!;
           setPlaylist(prev => [...prev, { id: crypto.randomUUID(), type: 'spotify', name: `Spotify ${match[1]}`, src: `https://open.spotify.com/embed/${match[1]}/${match[2]}?utm_source=generator&theme=0`, thumbnail: '' }]);

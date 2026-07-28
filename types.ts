@@ -341,3 +341,32 @@ export interface BulletinUsage {
   dailyLimit: number;
 }
 
+export interface DialogueSpeaker {
+  id: 'A' | 'B';
+  name: string;
+  voice: string;
+  tone: string;
+  avatarColor: string;
+}
+
+export interface DialogueLine {
+  id: string;
+  speakerId: 'A' | 'B';
+  text: string;
+  emotion?: string;
+  pauseAfterSec?: number;
+}
+
+export interface DialogueHistoryItem {
+  id: string;
+  userId: string;
+  title: string;
+  situation: string;
+  speakerA: { name: string; voice: string };
+  speakerB: { name: string; voice: string };
+  linesCount: number;
+  duration: number;
+  createdAt: number;
+  audioBase64?: string;
+}
+

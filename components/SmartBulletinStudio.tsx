@@ -146,22 +146,18 @@ const SmartBulletinStudio: React.FC<SmartBulletinStudioProps> = ({
     setYtResult(null);
 
     try {
-      // Extract query or video ID
-      let query = ytUrl;
-      if (ytUrl.includes('v=')) {
-        query = ytUrl.split('v=')[1].split('&')[0];
-      } else if (ytUrl.includes('youtu.be/')) {
-        query = ytUrl.split('youtu.be/')[1].split('?')[0];
-      }
-
-      const results = await buscarYouTube(query);
+      const results = await buscarYouTube(ytUrl.trim());
       if (results && results.length > 0) {
         setYtResult(results[0]);
       } else {
         setYtError("Nenhum vídeo retornado para este link. Verifique a URL.");
       }
     } catch (err: any) {
-      setYtError("Não foi possível carregar os metadados do YouTube. Verifique a chave de API ou tente outro link.");
+      if (err.message === 'INVALID_API_KEY' || err.message === 'API_KEY_MISSING') {
+        setYtError("Para buscas genéricas por termo, é necessária a chave de API. Cole a URL direta do vídeo do YouTube para carregar.");
+      } else {
+        setYtError("Não foi possível carregar os metadados do YouTube. Verifique a URL e tente novamente.");
+      }
     } finally {
       setIsFetchingYt(false);
     }

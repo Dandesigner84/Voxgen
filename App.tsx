@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, Sparkles, Loader2, PlayCircle, ArrowLeft, Heart, Smartphone, Play, Square, Volume2, LogOut, CheckCircle, XCircle, ShieldCheck, Newspaper } from 'lucide-react';
+import { Mic, Sparkles, Loader2, PlayCircle, ArrowLeft, Heart, Smartphone, Play, Square, Volume2, LogOut, CheckCircle, XCircle, ShieldCheck, Newspaper, Users } from 'lucide-react';
 import VoiceControls from './components/VoiceControls';
 import TextInput from './components/TextInput';
 import AudioList from './components/AudioList';
@@ -10,6 +10,7 @@ import AvatarStudio from './components/AvatarStudio';
 import SFXStudio from './components/SFXStudio';
 import SmartPlayer from './components/SmartPlayer';
 import SmartBulletinStudio from './components/SmartBulletinStudio';
+import DialogueStudio from './components/DialogueStudio';
 import MangaStudio from './components/MangaStudio';
 import VoiceCloningStudio from './components/VoiceCloningStudio';
 import PDFAudioModule from './components/PDFAudioModule';
@@ -51,7 +52,7 @@ const AppContent: React.FC = () => {
   const [isAddingSFX, setIsAddingSFX] = useState(false);
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
   const [globalGain, setGlobalGain] = useState(1.0);
-  const [narrationTab, setNarrationTab] = useState<'manual' | 'bulletin'>('manual');
+  const [narrationTab, setNarrationTab] = useState<'manual' | 'bulletin' | 'dialogue'>('manual');
   
   const previewSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
@@ -506,10 +507,21 @@ const AppContent: React.FC = () => {
                     >
                       <Newspaper size={16} /> 📰 Boletim Inteligente IA
                     </button>
+
+                    <button
+                      onClick={() => setNarrationTab('dialogue')}
+                      className={`px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all ${
+                        narrationTab === 'dialogue'
+                          ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/30'
+                          : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                      }`}
+                    >
+                      <Users size={16} /> 💬 Diálogo entre Vozes
+                    </button>
                   </div>
                 </div>
 
-                {narrationTab === 'manual' ? (
+                {narrationTab === 'manual' && (
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                       <div className="lg:col-span-7 space-y-6">
                           <VoiceControls selectedVoice={selectedVoice} onVoiceChange={setSelectedVoice} selectedTone={selectedTone} onToneChange={setSelectedTone} useMusic={useMusic} onMusicChange={setUseMusic} userEmail={user.email} />
@@ -531,8 +543,19 @@ const AppContent: React.FC = () => {
                           </div>
                       </div>
                   </div>
-                ) : (
+                )}
+
+                {narrationTab === 'bulletin' && (
                   <SmartBulletinStudio
+                    audioContext={audioContext}
+                    initAudioContext={initAudioContext}
+                    userEmail={user.email}
+                    userId={auth.currentUser?.uid || 'guest_user'}
+                  />
+                )}
+
+                {narrationTab === 'dialogue' && (
+                  <DialogueStudio
                     audioContext={audioContext}
                     initAudioContext={initAudioContext}
                     userEmail={user.email}
