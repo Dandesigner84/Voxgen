@@ -42,7 +42,7 @@ import {
   getUserBackgroundMusic,
   exportBulletinToSmartPlay
 } from '../services/bulletinService';
-import { buscarYouTube, YouTubeSearchResult } from '../services/youtubeService';
+import { buscarYouTube, YouTubeSearchResult, getYouTubeMetadata, extractYouTubeVideoId } from '../services/youtubeService';
 import { audioBufferToMp3, decodeAudioData } from '../utils/audioUtils';
 
 interface SmartBulletinStudioProps {
@@ -140,21 +140,41 @@ const SmartBulletinStudio: React.FC<SmartBulletinStudioProps> = ({
 
   // YouTube Metadata Fetcher
   const handleFetchYtMetadata = async () => {
-    if (!ytUrl.trim()) return;
+    const trimmedInput = ytUrl.trim();
+    if (!trimmedInput) return;
     setIsFetchingYt(true);
     setYtError(null);
     setYtResult(null);
 
+    const videoId = extractYouTubeVideoId(trimmedInput);
+
+    if (videoId) {
+      try {
+        const meta = await getYouTubeMetadata(trimmedInput);
+        setYtResult(meta);
+      } catch (err) {
+        setYtResult({
+          videoId,
+          title: `Trilha YouTube (${videoId})`,
+          thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+          channelTitle: 'YouTube'
+        });
+      } finally {
+        setIsFetchingYt(false);
+      }
+      return;
+    }
+
     try {
-      const results = await buscarYouTube(ytUrl.trim());
+      const results = await buscarYouTube(trimmedInput);
       if (results && results.length > 0) {
         setYtResult(results[0]);
       } else {
-        setYtError("Nenhum vídeo retornado para este link. Verifique a URL.");
+        setYtError("Nenhum vídeo retornado para esta busca. Cole a URL do vídeo.");
       }
     } catch (err: any) {
       if (err.message === 'INVALID_API_KEY' || err.message === 'API_KEY_MISSING') {
-        setYtError("Para buscas genéricas por termo, é necessária a chave de API. Cole a URL direta do vídeo do YouTube para carregar.");
+        setYtError("Para buscas por palavras-chave é necessária a chave de API. Cole o link direto do vídeo do YouTube para carregar instantaneamente.");
       } else {
         setYtError("Não foi possível carregar os metadados do YouTube. Verifique a URL e tente novamente.");
       }
