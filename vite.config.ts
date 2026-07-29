@@ -1,20 +1,61 @@
 
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
+import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // Carrega variáveis de ambiente, aceitando qualquer prefixo
-  const env = loadEnv(mode, (process as any).cwd(), '');
-
-  // Prioriza a chave configurada na Vercel ou .env local
-  const apiKey = env.API_KEY || env.VITE_API_KEY || env.VITE_GOOGLE_API_KEY || env.GOOGLE_API_KEY || '';
+  const env = loadEnv(mode, process.cwd(), '');
+  // Suporte flexível para múltiplos nomes de chaves no deploy (Vercel) usando process.env e env
+  const apiKey = process.env.GEMINI_API_KEY || env.GEMINI_API_KEY || 
+                 process.env.VITE_GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || 
+                 process.env.API_KEY || env.API_KEY || 
+                 process.env.VITE_API_KEY || env.VITE_API_KEY || 
+                 process.env.GOOGLE_API_KEY || env.GOOGLE_API_KEY || 
+                 process.env.VITE_GOOGLE_API_KEY || env.VITE_GOOGLE_API_KEY || '';
+  const openaiKey = process.env.OPENAI_API_KEY || env.OPENAI_API_KEY || 
+                    process.env.VITE_OPENAI_API_KEY || env.VITE_OPENAI_API_KEY || '';
+  const webhookUrl = process.env.VITE_REGISTRATION_WEBHOOK_URL || env.VITE_REGISTRATION_WEBHOOK_URL || 
+                     process.env.REGISTRATION_WEBHOOK_URL || env.REGISTRATION_WEBHOOK_URL || '';
 
   return {
-    plugins: [react()],
     define: {
-      // Injeta a chave no processo do navegador
-      'process.env.API_KEY': JSON.stringify(apiKey),
+      'process.env.GEMINI_API_KEY': JSON.stringify(apiKey),
+      'process.env.OPENAI_API_KEY': JSON.stringify(openaiKey),
+      'process.env.VITE_REGISTRATION_WEBHOOK_URL': JSON.stringify(webhookUrl),
     },
+    plugins: [
+      react(),
+      tailwindcss(),
+      VitePWA({
+        registerType: 'prompt',
+        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+        manifest: {
+          name: 'VoxGen AI',
+          short_name: 'VoxGen',
+          description: 'Estúdio de Voz Inteligente',
+          theme_color: '#020617',
+          icons: [
+            {
+              src: 'pwa-192x192.png',
+              sizes: '192x192',
+              type: 'image/png'
+            },
+            {
+              src: 'pwa-512x512.png',
+              sizes: '512x512',
+              type: 'image/png'
+            }
+          ]
+        },
+        workbox: {
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB
+        },
+        devOptions: {
+          enabled: false
+        }
+      })
+    ],
   };
 });

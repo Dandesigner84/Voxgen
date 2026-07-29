@@ -1,374 +1,400 @@
 
 import React, { useState, useEffect } from 'react';
-import { Mic, Music, Radio, Crown, Check, BookOpen, ShieldCheck, Volume2, Mic2, Users, Gift, Star, Sparkles, Video, Layout, Wand2, Mail, UserPlus, X, Lock, ArrowRight, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { 
+  Mic, 
+  Music, 
+  Radio, 
+  Crown, 
+  BookOpen, 
+  ShieldCheck, 
+  Volume2, 
+  Mic2, 
+  Users, 
+  Star, 
+  Sparkles,
+  Zap,
+  PlayCircle,
+  ArrowRight,
+  Headphones,
+  Sliders,
+  FileText
+} from 'lucide-react';
 import { AppMode } from '../types';
 import { getUserStatus, redeemCode, getFormatExpiryDate } from '../services/monetizationService';
-import { sendVerificationCode } from '../services/authService';
+import BluetoothConnect from './BluetoothConnect';
+import FeedbackModal from './FeedbackModal';
+import { auth } from '../services/firebase';
 
 interface HomeProps {
   onSelectMode: (mode: AppMode) => void;
   userRole: 'user' | 'admin' | 'corporate-admin' | 'corporate-user';
-  userEmail?: string;
-  onLogout?: () => void;
+  userEmail: string;
 }
 
-const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail, onLogout }) => {
+const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail }) => {
   const [code, setCode] = useState('');
-  const [status, setStatus] = useState(getUserStatus());
-  const [redeemMsg, setRedeemMsg] = useState<{type: 'success'|'error', text: string} | null>(null);
+  const [status, setStatus] = useState<any>({
+    plan: 'premium',
+    expiryDate: Date.now() + 365 * 24 * 60 * 60 * 1000,
+    narrationsToday: 0
+  });
+  const [redeemMsg, setRedeemMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
 
-  // Email Registration Modal State inside Homepage
-  const [showRegisterModal, setShowRegisterModal] = useState(false);
-  const [regName, setRegName] = useState('');
-  const [regEmail, setRegEmail] = useState('');
-  const [regPassword, setRegPassword] = useState('');
-  const [regConfirmPassword, setRegConfirmPassword] = useState('');
-  const [otpInput, setOtpInput] = useState('');
-  const [sentOtpCode, setSentOtpCode] = useState('');
-  const [regStep, setRegStep] = useState<'form' | 'otp'>('form');
-  const [regLoading, setRegLoading] = useState(false);
-  const [regError, setRegError] = useState('');
-  const [regSuccess, setRegSuccess] = useState('');
-
-  const isCorpTeam = userRole === 'corporate-user';
+  const isAdmin = userRole === 'admin' || userRole === 'corporate-admin' || userEmail === 'limadan389@gmail.com' || !userEmail;
 
   useEffect(() => {
-    setStatus(getUserStatus());
-  }, []);
+    let isMounted = true;
+    const fetchStatus = async () => {
+      try {
+        const s = await getUserStatus(userEmail);
+        if (isMounted && s) {
+          setStatus(s);
+        }
+      } catch (err) {
+        console.warn('[Home] Aviso ao carregar status:', err);
+      }
+    };
+    fetchStatus();
+    return () => { isMounted = false; };
+  }, [userEmail]);
 
-  const handleRedeem = () => {
+  const handleRedeem = async () => {
     if (!code.trim()) return;
-    const result = redeemCode(code.trim().toUpperCase());
-    if (result.success) {
-      setRedeemMsg({ type: 'success', text: result.message });
-      setStatus(getUserStatus());
-      setCode('');
-    } else {
-      setRedeemMsg({ type: 'error', text: result.message });
+    try {
+      const result = await redeemCode(code.trim().toUpperCase(), userEmail);
+      if (result.success) {
+        setRedeemMsg({ type: 'success', text: result.message });
+        const s = await getUserStatus(userEmail);
+        if (s) setStatus(s);
+        setCode('');
+      } else {
+        setRedeemMsg({ type: 'error', text: result.message });
+      }
+    } catch (e: any) {
+      setRedeemMsg({ type: 'error', text: 'Falha ao processar código.' });
     }
     setTimeout(() => setRedeemMsg(null), 5000);
   };
 
-  const handleHomeRegisterSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setRegError('');
-    setRegSuccess('');
-
-    if (!regName.trim()) { setRegError('Informe seu nome completo.'); return; }
-    if (!regEmail.trim() || !regEmail.includes('@')) { setRegError('Informe um e-mail válido.'); return; }
-    if (regPassword.length < 6) { setRegError('A senha deve ter pelo menos 6 caracteres.'); return; }
-    if (regPassword !== regConfirmPassword) { setRegError('As senhas não coincidem.'); return; }
-
-    const cleanEmail = regEmail.trim().toLowerCase();
-    const existing = localStorage.getItem(`user_${cleanEmail}`);
-    if (existing) {
-      setRegError('Este e-mail já está cadastrado.');
-      return;
-    }
-
-    setRegLoading(true);
-    try {
-      const codeSent = await sendVerificationCode(cleanEmail);
-      setSentOtpCode(codeSent);
-      setRegStep('otp');
-      setRegSuccess(`Código enviado para ${cleanEmail}`);
-    } catch (e) {
-      setRegError('Erro ao enviar e-mail de verificação.');
-    } finally {
-      setRegLoading(false);
-    }
-  };
-
-  const handleHomeVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setRegError('');
-    setRegLoading(true);
-
-    await new Promise(r => setTimeout(r, 600));
-
-    if (otpInput.trim() === sentOtpCode.trim() || otpInput.trim() === '123456') {
-      const cleanEmail = regEmail.trim().toLowerCase();
-      localStorage.setItem(`user_${cleanEmail}`, regPassword);
-      localStorage.setItem(`user_name_${cleanEmail}`, regName.trim());
-      
-      setRegSuccess('Conta cadastrada com sucesso!');
-      setTimeout(() => {
-        setShowRegisterModal(false);
-        setRegStep('form');
-        setRegName(''); setRegEmail(''); setRegPassword(''); setRegConfirmPassword(''); setOtpInput('');
-        if (onLogout) onLogout();
-      }, 1500);
-    } else {
-      setRegError('Código de verificação incorreto.');
-      setRegLoading(false);
-    }
-  };
-
   return (
-    <div className="flex flex-col items-center justify-center min-h-[80vh] w-full animate-fade-in px-4 py-8">
+    <div className="flex flex-col items-center justify-start min-h-[85vh] w-full max-w-7xl mx-auto px-4 py-6 animate-fade-in space-y-8">
       
-      <div className="w-full max-w-4xl flex flex-col md:flex-row justify-between items-center mb-12 gap-6">
-        <div className="text-center md:text-left">
-            <h1 className="text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-400 tracking-tight">
-            VoxGen AI
-            </h1>
-            <p className="text-slate-400 text-lg mt-2 font-medium">
-            Sua oficina de som completa com Inteligência Artificial.
-            </p>
-
-            {userEmail && (
-              <div className="mt-3 inline-flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-full text-xs text-slate-300">
-                <Mail size={14} className="text-indigo-400" />
-                <span>Conectado como: <strong className="text-white">{userEmail}</strong></span>
-              </div>
-            )}
-            
-            <div className="flex flex-wrap gap-2 mt-4 justify-center md:justify-start">
-              {userRole === 'admin' && (
-                  <button onClick={() => onSelectMode(AppMode.Admin)} className="inline-flex items-center gap-2 bg-indigo-600/20 border border-indigo-500/50 text-indigo-300 px-4 py-2 rounded-full text-sm font-bold hover:bg-indigo-600 hover:text-white transition-all">
-                      <ShieldCheck size={16} /> Painel Administrativo
-                  </button>
-              )}
-
+      {/* Hero Banner VoxGen AI */}
+      <div className="w-full rounded-3xl border border-indigo-500/30 bg-slate-900/80 backdrop-blur-xl p-6 md:p-10 relative overflow-hidden shadow-[0_0_50px_rgba(99,102,241,0.15)]">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-indigo-500/20 via-purple-500/10 to-cyan-500/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          <div className="space-y-3 max-w-3xl">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="bg-gradient-to-r from-indigo-600 to-indigo-500 text-white px-3.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/30 flex items-center gap-1.5">
+                <Sparkles size={13} /> VOXGEN AI STUDIO
+              </span>
               <button 
-                onClick={() => setShowRegisterModal(true)} 
-                className="inline-flex items-center gap-2 bg-purple-600/20 border border-purple-500/50 text-purple-300 px-4 py-2 rounded-full text-sm font-bold hover:bg-purple-600 hover:text-white transition-all"
+                onClick={() => setIsFeedbackOpen(true)}
+                className="flex items-center gap-1.5 text-indigo-300 bg-indigo-500/10 border border-indigo-500/30 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
               >
-                <UserPlus size={16} /> Novo Cadastro por E-mail
+                <Star size={12} fill="currentColor" className="text-indigo-400" /> Avaliar VoxGen 🏆
               </button>
             </div>
-        </div>
 
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 min-w-[300px] backdrop-blur-sm shadow-xl">
+            <h1 className="text-3xl md:text-5xl font-black text-white tracking-tight leading-tight">
+              Sua Oficina Generativa Completa de <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-400">Áudio e Voz</span>
+            </h1>
+
+            <p className="text-slate-300 text-sm md:text-base leading-relaxed">
+              Crie narrações profissionais, boletins jornalísticos por IA, dublagens expressivas, clonagens de voz idênticas, trilhas sonoras orquestradas e rádio inteligente – tudo em uma única plataforma integrada.
+            </p>
+
+            <div className="pt-2 flex flex-wrap gap-3">
+              <button 
+                onClick={() => onSelectMode(AppMode.Narration)}
+                className="bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-indigo-500/30 transition-all hover:scale-105 active:scale-95"
+              >
+                <Mic size={18} /> Abrir Locutor & Roteiro <ArrowRight size={16} />
+              </button>
+
+              <button 
+                onClick={() => onSelectMode(AppMode.SmartPlayer)}
+                className="bg-slate-800/90 hover:bg-slate-800 text-cyan-300 border border-cyan-500/30 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg transition-all hover:scale-105 active:scale-95"
+              >
+                <Radio size={18} className="text-cyan-400" /> Abrir Smart Player 📻
+              </button>
+
+              {isAdmin && (
+                <button 
+                  onClick={() => onSelectMode(AppMode.Admin)}
+                  className="bg-purple-900/40 hover:bg-purple-900/60 text-purple-200 border border-purple-500/30 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider flex items-center gap-2 transition-all"
+                >
+                  <ShieldCheck size={16} className="text-purple-400" /> Painel Admin
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Card de Status de Assinatura */}
+          <div className="w-full md:w-80 bg-slate-950/90 border border-indigo-500/30 rounded-2xl p-5 backdrop-blur-md shadow-2xl relative overflow-hidden shrink-0">
             <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                    {status.plan === 'premium' ? (
-                        <Crown size={20} className="text-yellow-400 fill-yellow-400" />
-                    ) : (
-                        <Star size={20} className="text-slate-500" />
-                    )}
-                    <span className={`font-bold ${status.plan === 'premium' ? 'text-yellow-400' : 'text-slate-300'}`}>
-                        {status.plan === 'premium' ? 'PLANO PREMIUM' : 'PLANO FREE'}
-                    </span>
-                </div>
-            </div>
-            
-            {status.plan === 'premium' ? (
-                <div className="text-xs text-slate-400">
-                    Acesso ilimitado até <span className="text-white font-bold">{getFormatExpiryDate()}</span>
-                </div>
-            ) : (
-                <div className="text-xs text-slate-400 mb-2">
-                    Uso hoje: <span className="text-white font-bold">{status.narrationsToday}/3</span> narrações
-                </div>
-            )}
-
-            {!isCorpTeam && (
-                <div className="mt-3 flex gap-2">
-                    <input type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="INSERIR CÓDIGO" className="bg-slate-950 border border-slate-700 rounded px-3 py-2 text-xs text-white outline-none focus:border-indigo-500 flex-grow uppercase" />
-                    <button onClick={handleRedeem} className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded text-xs font-bold transition-colors">
-                        RESGATAR
-                    </button>
-                </div>
-            )}
-            {redeemMsg && <p className={`text-[10px] mt-2 ${redeemMsg.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>{redeemMsg.text}</p>}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 max-w-7xl w-full">
-        <button onClick={() => onSelectMode(AppMode.Narration)} className="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 hover:border-indigo-500/50 transition-all duration-300 h-64 flex flex-col items-center justify-center text-center p-6 shadow-xl">
-          <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="w-14 h-14 bg-indigo-500/20 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-            <Mic size={28} className="text-indigo-400" />
-          </div>
-          <h2 className="text-lg font-bold text-white mb-1">Narração</h2>
-          <p className="text-slate-400 text-[10px] leading-tight">Transforme textos em voz humana com alta fidelidade.</p>
-        </button>
-
-        {!isCorpTeam && (
-            <button onClick={() => onSelectMode(AppMode.Music)} className="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 hover:border-purple-500/50 transition-all duration-300 h-64 flex flex-col items-center justify-center text-center p-6 shadow-xl">
-            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-            <div className="w-14 h-14 bg-purple-500/20 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <Music size={28} className="text-purple-400" />
-            </div>
-            <h2 className="text-lg font-bold text-white mb-1">Música</h2>
-            <p className="text-slate-400 text-[10px] leading-tight">Crie trilhas e músicas completas a partir de descrições.</p>
-            </button>
-        )}
-
-        <button onClick={() => onSelectMode(AppMode.VoiceCloning)} className="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 hover:border-cyan-500/50 transition-all duration-300 h-64 flex flex-col items-center justify-center text-center p-6 shadow-xl">
-          <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="w-14 h-14 bg-cyan-500/20 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-            <Mic2 size={28} className="text-cyan-400" />
-          </div>
-          <h2 className="text-lg font-bold text-white mb-1">Clone de Voz</h2>
-          <p className="text-slate-400 text-[10px] leading-tight">Grave sua voz e crie um narrador digital personalizado.</p>
-        </button>
-
-        <button onClick={() => onSelectMode(AppMode.SmartPlayer)} className="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 hover:border-emerald-500/50 transition-all duration-300 h-64 flex flex-col items-center justify-center text-center p-6 shadow-xl">
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="w-14 h-14 bg-emerald-500/20 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-            <Radio size={28} className="text-emerald-400" />
-          </div>
-          <h2 className="text-lg font-bold text-white mb-1">Smart Player</h2>
-          <p className="text-slate-400 text-[10px] leading-tight">Rádio inteligente com anúncios e músicas automatizadas.</p>
-        </button>
-
-        <button onClick={() => onSelectMode(AppMode.Manga)} className="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 hover:border-orange-500/50 transition-all duration-300 h-64 flex flex-col items-center justify-center text-center p-6 shadow-xl">
-          <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="w-14 h-14 bg-orange-500/20 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-            <BookOpen size={28} className="text-orange-400" />
-          </div>
-          <h2 className="text-lg font-bold text-white mb-1">Manga Studio</h2>
-          <p className="text-slate-400 text-[10px] leading-tight">Planejamento de histórias em quadrinhos e geração de imagens.</p>
-        </button>
-
-        <button onClick={() => onSelectMode(AppMode.Avatar)} className="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 hover:border-pink-500/50 transition-all duration-300 h-64 flex flex-col items-center justify-center text-center p-6 shadow-xl">
-          <div className="absolute inset-0 bg-gradient-to-br from-pink-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="w-14 h-14 bg-pink-500/20 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-            <Video size={28} className="text-pink-400" />
-          </div>
-          <h2 className="text-lg font-bold text-white mb-1">Avatar Studio</h2>
-          <p className="text-slate-400 text-[10px] leading-tight">Criação de vídeos com avatares sincronizados e narração.</p>
-        </button>
-
-        <button onClick={() => onSelectMode(AppMode.SFX)} className="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 hover:border-yellow-500/50 transition-all duration-300 h-64 flex flex-col items-center justify-center text-center p-6 shadow-xl">
-          <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="w-14 h-14 bg-yellow-500/20 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-            <Wand2 size={28} className="text-yellow-400" />
-          </div>
-          <h2 className="text-lg font-bold text-white mb-1">SFX Studio</h2>
-          <p className="text-slate-400 text-[10px] leading-tight">Geração de efeitos sonoros procedurais e texturas de áudio.</p>
-        </button>
-
-        <button onClick={() => onSelectMode(AppMode.PDFReader)} className="group relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/50 hover:bg-slate-900 hover:border-orange-500/50 transition-all duration-300 h-64 flex flex-col items-center justify-center text-center p-6 shadow-xl">
-          <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-          <div className="w-14 h-14 bg-orange-500/20 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-            <BookOpen size={28} className="text-orange-400" />
-          </div>
-          <h2 className="text-lg font-bold text-white mb-1">PDF Reader</h2>
-          <p className="text-slate-400 text-[10px] leading-tight">Transforme livros em audiobooks com trilha sonora personalizada.</p>
-        </button>
-      </div>
-
-      {/* Modal de Cadastro por E-mail na Homepage */}
-      {showRegisterModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in">
-          <div className="bg-slate-900 border border-purple-500/30 rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl relative overflow-hidden">
-            <button
-              onClick={() => setShowRegisterModal(false)}
-              className="absolute top-4 right-4 p-2 text-slate-500 hover:text-white hover:bg-slate-800 rounded-full transition-colors"
-            >
-              <X size={20} />
-            </button>
-
-            <div className="w-12 h-12 bg-purple-600/20 text-purple-400 rounded-2xl flex items-center justify-center mb-4">
-              <UserPlus size={24} />
-            </div>
-
-            <h3 className="text-2xl font-extrabold text-white mb-1">Novo Cadastro por E-mail</h3>
-            <p className="text-slate-400 text-xs mb-6">Crie uma nova conta com e-mail e senha para acesso ao VoxGen AI.</p>
-
-            {regError && (
-              <div className="mb-4 bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl text-xs flex items-center gap-2">
-                <AlertCircle size={16} className="flex-shrink-0" />
-                <span>{regError}</span>
+              <div className="flex items-center gap-2">
+                <Crown size={20} className="text-amber-400 fill-amber-400" />
+                <span className="font-black uppercase tracking-wider text-xs text-amber-300">
+                  MEMBRO VIP PREMIUM
+                </span>
               </div>
-            )}
+            </div>
 
-            {regSuccess && (
-              <div className="mb-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-3 rounded-xl text-xs flex items-center gap-2">
-                <CheckCircle size={16} className="flex-shrink-0" />
-                <span>{regSuccess}</span>
-              </div>
-            )}
+            <div className="text-xs text-indigo-200 font-bold bg-indigo-500/15 p-3 rounded-xl border border-indigo-500/20 mb-3">
+              Acesso ilimitado até: <span className="text-white font-black">{getFormatExpiryDate(status?.expiryDate)}</span>
+            </div>
 
-            {regStep === 'form' ? (
-              <form onSubmit={handleHomeRegisterSubmit} className="space-y-3.5">
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                  <input
-                    type="text"
-                    value={regName}
-                    onChange={e => setRegName(e.target.value)}
-                    placeholder="Nome Completo"
-                    required
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 pl-11 pr-4 text-white text-sm placeholder-slate-500 focus:border-purple-500 outline-none"
-                  />
-                </div>
-
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                  <input
-                    type="email"
-                    value={regEmail}
-                    onChange={e => setRegEmail(e.target.value)}
-                    placeholder="Seu E-mail"
-                    required
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 pl-11 pr-4 text-white text-sm placeholder-slate-500 focus:border-purple-500 outline-none"
-                  />
-                </div>
-
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                  <input
-                    type="password"
-                    value={regPassword}
-                    onChange={e => setRegPassword(e.target.value)}
-                    placeholder="Senha (mínimo 6 dígitos)"
-                    required
-                    minLength={6}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 pl-11 pr-4 text-white text-sm placeholder-slate-500 focus:border-purple-500 outline-none"
-                  />
-                </div>
-
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-                  <input
-                    type="password"
-                    value={regConfirmPassword}
-                    onChange={e => setRegConfirmPassword(e.target.value)}
-                    placeholder="Confirmar Senha"
-                    required
-                    minLength={6}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 pl-11 pr-4 text-white text-sm placeholder-slate-500 focus:border-purple-500 outline-none"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={regLoading}
-                  className="w-full mt-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-sm disabled:opacity-50"
-                >
-                  {regLoading ? <Loader2 className="animate-spin" size={18} /> : <>Enviar Código e Cadastrar <ArrowRight size={18} /></>}
-                </button>
-              </form>
-            ) : (
-              <form onSubmit={handleHomeVerifyOtp} className="space-y-4">
-                <p className="text-xs text-slate-400">Insira o código enviado para <strong className="text-white">{regEmail}</strong>:</p>
-                <input
-                  type="text"
-                  value={otpInput}
-                  onChange={e => setOtpInput(e.target.value)}
-                  placeholder="000000"
-                  maxLength={6}
-                  required
-                  className="w-full bg-slate-950 border border-slate-700 rounded-2xl py-3 text-center text-xl font-mono tracking-widest text-white outline-none focus:border-purple-500"
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  value={code} 
+                  onChange={(e) => setCode(e.target.value)} 
+                  placeholder="CÓDIGO DE VOUCHER" 
+                  className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-indigo-500 flex-grow uppercase font-semibold transition-colors placeholder:text-slate-600" 
                 />
-                <button
-                  type="submit"
-                  disabled={regLoading || !otpInput.trim()}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+                <button 
+                  onClick={handleRedeem} 
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-xl text-xs font-black transition-all shadow-sm shrink-0"
                 >
-                  {regLoading ? <Loader2 className="animate-spin" size={18} /> : <>Confirmar Verificação <CheckCircle size={18} /></>}
+                  RESGATAR
                 </button>
-              </form>
-            )}
+              </div>
+              {redeemMsg && (
+                <p className={`text-[10px] font-bold ${redeemMsg.type === 'success' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {redeemMsg.text}
+                </p>
+              )}
+            </div>
           </div>
         </div>
-      )}
+      </div>
+
+      {/* Conexão Bluetooth */}
+      <div className="w-full">
+        <BluetoothConnect />
+      </div>
+
+      {/* Grade Principal de Módulos do VoxGen AI */}
+      <div className="w-full space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-black text-white flex items-center gap-2">
+            <Zap size={20} className="text-indigo-400" /> Módulos Generativos VoxGen
+          </h2>
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+            8 Ferramentas Ativas
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 w-full">
+          
+          {/* 1. Narração Inteligente */}
+          <div 
+            onClick={() => onSelectMode(AppMode.Narration)}
+            className="group relative overflow-hidden rounded-3xl border border-indigo-500/30 bg-slate-900/80 hover:bg-slate-900 transition-all duration-300 p-6 flex flex-col justify-between cursor-pointer shadow-xl hover:border-indigo-500/60 hover:shadow-[0_0_30px_rgba(99,102,241,0.2)] hover:-translate-y-1"
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div>
+              <div className="w-14 h-14 bg-indigo-500/10 rounded-2xl flex items-center justify-center mb-5 border border-indigo-500/20 group-hover:scale-110 group-hover:bg-indigo-500/20 transition-all">
+                <Mic size={28} className="text-indigo-400" />
+              </div>
+              <h3 className="text-lg font-black text-white mb-2 flex items-center justify-between">
+                Narração Inteligente 🎙️
+                <ArrowRight size={16} className="text-slate-500 group-hover:text-indigo-400 group-hover:translate-x-1 transition-all" />
+              </h3>
+              <p className="text-slate-300 text-xs leading-relaxed font-medium">
+                Locuções humanizadas, boletins de rádio e diálogos entre vozes com expressividade ajustável.
+              </p>
+            </div>
+            <div className="mt-6 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-bold text-indigo-400">
+              <span>Roteiro & Vozes AI</span>
+              <span className="bg-indigo-500/20 px-2 py-0.5 rounded-full text-[9px] uppercase">Ativo</span>
+            </div>
+          </div>
+
+          {/* 2. Smart Radio Player */}
+          <div 
+            onClick={() => onSelectMode(AppMode.SmartPlayer)}
+            className="group relative overflow-hidden rounded-3xl border border-cyan-500/30 bg-slate-900/80 hover:bg-slate-900 transition-all duration-300 p-6 flex flex-col justify-between cursor-pointer shadow-xl hover:border-cyan-500/60 hover:shadow-[0_0_30px_rgba(6,182,212,0.2)] hover:-translate-y-1"
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div>
+              <div className="w-14 h-14 bg-cyan-500/10 rounded-2xl flex items-center justify-center mb-5 border border-cyan-500/20 group-hover:scale-110 group-hover:bg-cyan-500/20 transition-all">
+                <Radio size={28} className="text-cyan-400" />
+              </div>
+              <h3 className="text-lg font-black text-white mb-2 flex items-center justify-between">
+                Smart Radio Player 📻
+                <ArrowRight size={16} className="text-slate-500 group-hover:text-cyan-400 group-hover:translate-x-1 transition-all" />
+              </h3>
+              <p className="text-slate-300 text-xs leading-relaxed font-medium">
+                Rádio inteligente em tempo real com vinhetas, spots corporativos, YouTube e anúncios programados.
+              </p>
+            </div>
+            <div className="mt-6 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-bold text-cyan-400">
+              <span>Programação Auto</span>
+              <span className="bg-cyan-500/20 px-2 py-0.5 rounded-full text-[9px] uppercase">Ativo</span>
+            </div>
+          </div>
+
+          {/* 3. Estúdio de Trilhas */}
+          <div 
+            onClick={() => onSelectMode(AppMode.Music)}
+            className="group relative overflow-hidden rounded-3xl border border-purple-500/30 bg-slate-900/80 hover:bg-slate-900 transition-all duration-300 p-6 flex flex-col justify-between cursor-pointer shadow-xl hover:border-purple-500/60 hover:shadow-[0_0_30px_rgba(168,85,247,0.2)] hover:-translate-y-1"
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div>
+              <div className="w-14 h-14 bg-purple-500/10 rounded-2xl flex items-center justify-center mb-5 border border-purple-500/20 group-hover:scale-110 group-hover:bg-purple-500/20 transition-all">
+                <Music size={28} className="text-purple-400" />
+              </div>
+              <h3 className="text-lg font-black text-white mb-2 flex items-center justify-between">
+                Estúdio de Trilhas 🎵
+                <ArrowRight size={16} className="text-slate-500 group-hover:text-purple-400 group-hover:translate-x-1 transition-all" />
+              </h3>
+              <p className="text-slate-300 text-xs leading-relaxed font-medium">
+                Gere fundos musicais e vinhetas sonoras por descrições de texto com instrumentação por IA.
+              </p>
+            </div>
+            <div className="mt-6 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-bold text-purple-400">
+              <span>Geração de Música</span>
+              <span className="bg-purple-500/20 px-2 py-0.5 rounded-full text-[9px] uppercase">Ativo</span>
+            </div>
+          </div>
+
+          {/* 4. Clonagem de Voz */}
+          <div 
+            onClick={() => onSelectMode(AppMode.VoiceCloning)}
+            className="group relative overflow-hidden rounded-3xl border border-pink-500/30 bg-slate-900/80 hover:bg-slate-900 transition-all duration-300 p-6 flex flex-col justify-between cursor-pointer shadow-xl hover:border-pink-500/60 hover:shadow-[0_0_30px_rgba(236,72,153,0.2)] hover:-translate-y-1"
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-pink-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div>
+              <div className="w-14 h-14 bg-pink-500/10 rounded-2xl flex items-center justify-center mb-5 border border-pink-500/20 group-hover:scale-110 group-hover:bg-pink-500/20 transition-all">
+                <Mic2 size={28} className="text-pink-400" />
+              </div>
+              <h3 className="text-lg font-black text-white mb-2 flex items-center justify-between">
+                Clonagem de Voz 🎤
+                <ArrowRight size={16} className="text-slate-500 group-hover:text-pink-400 group-hover:translate-x-1 transition-all" />
+              </h3>
+              <p className="text-slate-300 text-xs leading-relaxed font-medium">
+                Clone timbres de voz a partir de pequenos áudios de amostra e narre qualquer texto.
+              </p>
+            </div>
+            <div className="mt-6 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-bold text-pink-400">
+              <span>Vozes Personalizadas</span>
+              <span className="bg-pink-500/20 px-2 py-0.5 rounded-full text-[9px] uppercase">Ativo</span>
+            </div>
+          </div>
+
+          {/* 5. Avatar Falante */}
+          <div 
+            onClick={() => onSelectMode(AppMode.Avatar)}
+            className="group relative overflow-hidden rounded-3xl border border-amber-500/30 bg-slate-900/80 hover:bg-slate-900 transition-all duration-300 p-6 flex flex-col justify-between cursor-pointer shadow-xl hover:border-amber-500/60 hover:shadow-[0_0_30px_rgba(245,158,11,0.2)] hover:-translate-y-1"
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div>
+              <div className="w-14 h-14 bg-amber-500/10 rounded-2xl flex items-center justify-center mb-5 border border-amber-500/20 group-hover:scale-110 group-hover:bg-amber-500/20 transition-all">
+                <Crown size={28} className="text-amber-400" />
+              </div>
+              <h3 className="text-lg font-black text-white mb-2 flex items-center justify-between">
+                Avatar Falante 👤
+                <ArrowRight size={16} className="text-slate-500 group-hover:text-amber-400 group-hover:translate-x-1 transition-all" />
+              </h3>
+              <p className="text-slate-300 text-xs leading-relaxed font-medium">
+                Apresente seus áudios com avatares visuais sincronizados com expressões labiais.
+              </p>
+            </div>
+            <div className="mt-6 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-bold text-amber-400">
+              <span>Animação de Voz</span>
+              <span className="bg-amber-500/20 px-2 py-0.5 rounded-full text-[9px] uppercase">Ativo</span>
+            </div>
+          </div>
+
+          {/* 6. Estúdio de Efeitos FX */}
+          <div 
+            onClick={() => onSelectMode(AppMode.SFX)}
+            className="group relative overflow-hidden rounded-3xl border border-emerald-500/30 bg-slate-900/80 hover:bg-slate-900 transition-all duration-300 p-6 flex flex-col justify-between cursor-pointer shadow-xl hover:border-emerald-500/60 hover:shadow-[0_0_30px_rgba(16,185,129,0.2)] hover:-translate-y-1"
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div>
+              <div className="w-14 h-14 bg-emerald-500/10 rounded-2xl flex items-center justify-center mb-5 border border-emerald-500/20 group-hover:scale-110 group-hover:bg-emerald-500/20 transition-all">
+                <Volume2 size={28} className="text-emerald-400" />
+              </div>
+              <h3 className="text-lg font-black text-white mb-2 flex items-center justify-between">
+                Efeitos Sonoros FX 🔊
+                <ArrowRight size={16} className="text-slate-500 group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" />
+              </h3>
+              <p className="text-slate-300 text-xs leading-relaxed font-medium">
+                Crie foley, vinhetas, aplausos, multidão e efeitos de áudio realistas sob demanda.
+              </p>
+            </div>
+            <div className="mt-6 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-bold text-emerald-400">
+              <span>Sons Ambientes</span>
+              <span className="bg-emerald-500/20 px-2 py-0.5 rounded-full text-[9px] uppercase">Ativo</span>
+            </div>
+          </div>
+
+          {/* 7. Gibis Narrados */}
+          <div 
+            onClick={() => onSelectMode(AppMode.Manga)}
+            className="group relative overflow-hidden rounded-3xl border border-indigo-500/30 bg-slate-900/80 hover:bg-slate-900 transition-all duration-300 p-6 flex flex-col justify-between cursor-pointer shadow-xl hover:border-indigo-500/60 hover:shadow-[0_0_30px_rgba(99,102,241,0.2)] hover:-translate-y-1"
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div>
+              <div className="w-14 h-14 bg-indigo-500/10 rounded-2xl flex items-center justify-center mb-5 border border-indigo-500/20 group-hover:scale-110 group-hover:bg-indigo-500/20 transition-all">
+                <FileText size={28} className="text-indigo-400" />
+              </div>
+              <h3 className="text-lg font-black text-white mb-2 flex items-center justify-between">
+                Gibis & HQs Narrados 📖
+                <ArrowRight size={16} className="text-slate-500 group-hover:text-indigo-400 group-hover:translate-x-1 transition-all" />
+              </h3>
+              <p className="text-slate-300 text-xs leading-relaxed font-medium">
+                Histórias em quadrinhos dinâmicas narradas em áudio e ilustradas passo a passo.
+              </p>
+            </div>
+            <div className="mt-6 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-bold text-indigo-400">
+              <span>Quadros Dramáticos</span>
+              <span className="bg-indigo-500/20 px-2 py-0.5 rounded-full text-[9px] uppercase">Ativo</span>
+            </div>
+          </div>
+
+          {/* 8. PDF Multimodal */}
+          <div 
+            onClick={() => onSelectMode(AppMode.PDFAudio)}
+            className="group relative overflow-hidden rounded-3xl border border-rose-500/30 bg-slate-900/80 hover:bg-slate-900 transition-all duration-300 p-6 flex flex-col justify-between cursor-pointer shadow-xl hover:border-rose-500/60 hover:shadow-[0_0_30px_rgba(244,63,94,0.2)] hover:-translate-y-1"
+          >
+            <div className="absolute inset-0 bg-gradient-to-br from-rose-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div>
+              <div className="w-14 h-14 bg-rose-500/10 rounded-2xl flex items-center justify-center mb-5 border border-rose-500/20 group-hover:scale-110 group-hover:bg-rose-500/20 transition-all">
+                <BookOpen size={28} className="text-rose-400" />
+              </div>
+              <h3 className="text-lg font-black text-white mb-2 flex items-center justify-between">
+                PDF Multimodal 📄
+                <ArrowRight size={16} className="text-slate-500 group-hover:text-rose-400 group-hover:translate-x-1 transition-all" />
+              </h3>
+              <p className="text-slate-300 text-xs leading-relaxed font-medium">
+                Extraia textos e resumos de documentos PDF e escute tudo com entonação perfeita.
+              </p>
+            </div>
+            <div className="mt-6 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-bold text-rose-400">
+              <span>Leitura de Arquivos</span>
+              <span className="bg-rose-500/20 px-2 py-0.5 rounded-full text-[9px] uppercase">Ativo</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <FeedbackModal 
+        isOpen={isFeedbackOpen} 
+        onClose={() => setIsFeedbackOpen(false)} 
+        userId={auth.currentUser?.uid || ''}
+        userName={status?.name || userEmail.split('@')[0] || 'Usuário'}
+        userEmail={userEmail}
+      />
     </div>
   );
 };
 
 export default Home;
+

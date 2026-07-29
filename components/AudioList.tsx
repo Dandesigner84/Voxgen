@@ -3,7 +3,6 @@ import React, { useRef, useState } from 'react';
 import { Play, Pause, Download, Clock, User, ChevronDown, FileAudio } from 'lucide-react';
 import { AudioItem } from '../types';
 import { audioBufferToWav, audioBufferToMp3 } from '../utils/audioUtils';
-import { startKeepAlive, updateMediaSession, setMediaSessionPlaybackState } from '../utils/backgroundAudio';
 
 interface AudioListProps {
   items: AudioItem[];
@@ -24,7 +23,6 @@ const AudioList: React.FC<AudioListProps> = ({ items, audioContext }) => {
         activeSourceRef.current = null;
       }
       setPlayingId(null);
-      setMediaSessionPlaybackState('paused');
       return;
     }
 
@@ -37,25 +35,6 @@ const AudioList: React.FC<AudioListProps> = ({ items, audioContext }) => {
       await audioContext.resume();
     }
 
-    startKeepAlive();
-    updateMediaSession({
-      title: item.text.slice(0, 30) + '...',
-      artist: `Voz: ${item.voice}`,
-      album: 'VoxGen Narração',
-      artworkUrl: '/icon.png'
-    }, {
-      onPlay: () => handlePlay(item),
-      onPause: () => {
-        if (activeSourceRef.current) {
-          activeSourceRef.current.stop();
-          activeSourceRef.current = null;
-        }
-        setPlayingId(null);
-        setMediaSessionPlaybackState('paused');
-      }
-    });
-    setMediaSessionPlaybackState('playing');
-
     const source = audioContext.createBufferSource();
     source.buffer = item.audioData;
     source.connect(audioContext.destination);
@@ -63,7 +42,6 @@ const AudioList: React.FC<AudioListProps> = ({ items, audioContext }) => {
     source.onended = () => {
       setPlayingId(null);
       activeSourceRef.current = null;
-      setMediaSessionPlaybackState('paused');
     };
 
     source.start(0);

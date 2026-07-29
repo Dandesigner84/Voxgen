@@ -9,24 +9,44 @@ const STORAGE_KEYS = {
 };
 
 const getClient = () => {
-  const rawKey = process.env.GEMINI_API_KEY || process.env.API_KEY || "";
-  const cleanKey = rawKey.replace(/["'\s]/g, ""); 
-  if (!cleanKey) {
-    console.error("[Gemini Service] Chave de API não encontrada! Verifique as configurações do projeto.");
+  let rawKey = "";
+  try {
+    rawKey = process.env.GEMINI_API_KEY || "";
+  } catch (e) { void e; }
+  
+  if (!rawKey || rawKey === "undefined" || rawKey === "null") {
+    try {
+      rawKey = (import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.VITE_API_KEY || "") as string;
+    } catch (e) {
+      // Ignora erro fora de ambientes ESM/Vite
+    }
   }
+
+  const cleanKey = rawKey ? rawKey.replace(/["'\s]/g, "") : ""; 
+  
+  if (!cleanKey || cleanKey === "undefined" || cleanKey === "null" || cleanKey === "GEMINI_API_KEY" || cleanKey === "VITE_GEMINI_API_KEY" || cleanKey === "VITE_API_KEY") {
+    throw new Error("Sua chave de API do Gemini não está configurada ou é inválida no Vercel. Verifique as variáveis de ambiente do seu projeto no menu do Vercel e refaça o Deploy para que o Vite compile a chave!");
+  }
+  
   return new GoogleGenAI({ apiKey: cleanKey });
 };
 
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+import { getApprovedVoices } from "./voiceService";
+
+let customVoicesCache: CustomVoice[] = [];
+
+const updateVoicesCache = async () => {
+    customVoicesCache = await getApprovedVoices();
+};
+
+// Update cache every 2 minutes
+setInterval(updateVoicesCache, 120000);
+updateVoicesCache();
+
 const getCustomVoiceById = (id: string): CustomVoice | undefined => {
-    try {
-      const data = localStorage.getItem(STORAGE_KEYS.CUSTOM_VOICES);
-      const voices: CustomVoice[] = data ? JSON.parse(data) : [];
-      return voices.find(v => v.id === id);
-    } catch (e) {
-      return undefined;
-    }
+    return customVoicesCache.find(v => v.id === id);
 };
 
 const getMimeTypeFromBase64 = (base64String: string, defaultType: string = 'audio/wav'): string => {
@@ -45,20 +65,24 @@ export const refineText = async (text: string, tone: ToneType | string, useBackg
 
   if (tone === 'Vignette') {
       specificInstruction += " ESTILO VINHETA DE RÁDIO: Use linguagem impactante, curta e direta. INSERIR EFEITOS SONOROS. ";
-  } else if (tone === ToneType.Sales) {
-      specificInstruction += " ESTILO VENDAS: Urgente. Sugira uso de (caixa) ou (buzina). ";
-  } else if (tone === ToneType.Dramatic) {
-      specificInstruction += " ESTILO DRAMÁTICO: Use pausas e emoção. ";
+  } else if (tone === ToneType.Sales || tone === ToneType.Advertising) {
+      specificInstruction += " ESTILO VENDAS: Urgente, persuasivo e impactante. Sugira uso de (caixa) ou (buzina). ";
+  } else if (tone === ToneType.Dramatic || tone === ToneType.Storytelling) {
+      specificInstruction += " ESTILO DRAMÁTICO/STORYTELLING: Use pausas narrativas, emoção e ritmo de contador de histórias. ";
   } else if (tone === ToneType.Professional) {
       specificInstruction += " ESTILO PROFISSIONAL: Linguagem corporativa, clara e polida. ";
-  } else if (tone === ToneType.CarSound) {
-      specificInstruction += " ESTILO CARRO DE SOM: Estilo anúncio de rua brasileiro. MUITO enérgico, repetitivo para clareza, chamativo, use gírias comerciais locais (ex: 'Atenção freguesia!', 'É só hoje!', 'Venha conferir!'). ";
-  } else if (tone === ToneType.RadioCommercial) {
-      specificInstruction += " ESTILO COMERCIAL DE RÁDIO: Locutor profissional. Polido, rítmico, articulação clara, persuasivo. ";
-  } else if (tone === ToneType.PromotionalEnergetic) {
-      specificInstruction += " ESTILO PROMOÇÃO EXPLOSIVA: Energia máxima, alto impacto, estilo 'Black Friday' intenso. ";
-  } else if (tone === ToneType.StorefrontAnnouncer) {
-      specificInstruction += " ESTILO PORTA DE LOJA: Locutor de rua agitado. Use tons de 'grito' (em texto, use exclamações e palavras de ordem), frases curtas, gírias de vendedor de rua, MUITO chamativo para pedestres e carros. Ex: 'OLHA O PREÇO!', 'É PRA ACABAR!', 'VEM VEM VEM!'. Insira (buzina) ou (explosao) no início para chamar atenção. ";
+  } else if (tone === ToneType.Romantic) {
+      specificInstruction += " ESTILO ROMÂNTICO: Voz suave, pausada e com carga emocional carinhosa. ";
+  } else if (tone === ToneType.Suspense) {
+      specificInstruction += " ESTILO SUSPENSE: Voz misteriosa, sussurrada em alguns momentos e com ritmo tenso. ";
+  } else if (tone === ToneType.Meditation || tone === ToneType.Soothing) {
+      specificInstruction += " ESTILO MEDITAÇÃO: Ritmo muito lento, tons de voz tranquilos e pausas longas entre frases. ";
+  } else if (tone === ToneType.Motivation) {
+      specificInstruction += " ESTILO MOTIVACIONAL: Inspirador, forte, com ênfase em palavras de ação e superação. ";
+  } else if (tone === ToneType.News) {
+      specificInstruction += " ESTILO JORNALÍSTICO: Objetivo, claro, com a cadência típica de âncoras de notícias. ";
+  } else if (tone === ToneType.Review) {
+      specificInstruction += " ESTILO REVIEW: Conversacional, honesto, detalhando características de um produto ou serviço. ";
   }
 
   const prompt = `
@@ -83,7 +107,7 @@ export const refineText = async (text: string, tone: ToneType | string, useBackg
       contents: prompt,
     });
     
-    let cleanedText = response.text?.trim() || text;
+    let cleanedText = response.text || text;
     cleanedText = cleanedText.replace(/^["']|["']$/g, "").trim();
     return cleanedText;
   } catch (e) {
@@ -107,7 +131,7 @@ export const addAutomaticSFX = async (text: string): Promise<string> => {
       model: 'gemini-3-flash-preview',
       contents: prompt,
     });
-    return response.text?.trim() || text;
+    return response.text || text;
   } catch (e) {
     return text;
   }
@@ -115,249 +139,179 @@ export const addAutomaticSFX = async (text: string): Promise<string> => {
 
 const callTTS = async (textChunk: string, voiceName: string, isCustom: boolean): Promise<string> => {
     if (!textChunk.trim()) return "";
+    
+    // Support for OpenAI Voices
+    if (voiceName.endsWith('-OI')) {
+        const apiKey = process.env.OPENAI_API_KEY;
+        if (!apiKey || apiKey === "undefined") {
+            throw new Error("API Key do OpenAI não configurada. Fale com o administrador.");
+        }
+        
+        const cleanVoice = voiceName.split('-')[0].toLowerCase();
+        try {
+            const response = await fetch("https://api.openai.com/v1/audio/speech", {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${apiKey}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    model: "tts-1-hd",
+                    voice: cleanVoice,
+                    input: textChunk
+                })
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(`OpenAI: ${err.error?.message || response.statusText}`);
+            }
+
+            const arrayBuffer = await response.arrayBuffer();
+            const bytes = new Uint8Array(arrayBuffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return window.btoa(binary);
+        } catch (e: any) {
+            throw new Error(`Erro OpenAI: ${e.message}`, { cause: e });
+        }
+    }
+
     const ai = getClient();
     const MAX_RETRIES = 5;
-    let effectiveVoice = voiceName.split('-')[0];
-    const customVoiceData = !Object.values(VoiceName).includes(effectiveVoice as VoiceName) && !voiceName.includes('-') 
+    const effectiveVoice = voiceName.split('-')[0];
+    
+    // Safety mapping for Gemini Prebuilt Voices
+    const validGeminiVoices = ['Puck', 'Charon', 'Kore', 'Fenrir', 'Aoede'];
+    if (!validGeminiVoices.includes(effectiveVoice) && !voiceName.includes('-')) {
+        // Fallback to Kore if voice is unknown
+    }
+
+    const customVoiceData = !validGeminiVoices.includes(effectiveVoice) && !voiceName.includes('-') 
         ? getCustomVoiceById(effectiveVoice) 
         : null;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
-            console.log(`[TTS] Tentativa ${attempt} para voz ${effectiveVoice}...`);
+            console.log(`[Gemini TTS] Attempt ${attempt} for voice: ${effectiveVoice}`);
             if (customVoiceData && customVoiceData.audioSampleBase64) {
-                console.log("[TTS] Usando voz personalizada...");
                 const mimeType = getMimeTypeFromBase64(customVoiceData.audioSampleBase64);
                 const base64Sample = customVoiceData.audioSampleBase64.split(',')[1] || customVoiceData.audioSampleBase64;
+                
+                // For custom voice "cloning", we use the multimodal capability of Gemini 3.1 Flash TTS
                 const response = await ai.models.generateContent({
-                    model: "gemini-2.5-flash-native-audio-preview-09-2025",
+                    model: "gemini-3.1-flash-tts-preview",
                     contents: {
                         parts: [
                             { inlineData: { mimeType: mimeType, data: base64Sample } },
-                            { text: `Read exactly in Portuguese Brazil: "${textChunk}"` }
+                            { text: `Siga o timbre e estilo deste áudio. Leia exatamente este texto com emoção e clareza em Português Brasil: "${textChunk}"` }
                         ]
                     },
-                    config: { responseModalities: [Modality.AUDIO] }
+                    config: { 
+                        responseModalities: [Modality.AUDIO]
+                    }
                 });
-                const data = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
-                console.log(`[TTS] Resposta recebida (${data.length} bytes)`);
-                return data;
+                return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
             } 
-            console.log("[TTS] Usando voz padrão...");
+            
+            // Map to a valid voice if not standard
+            const finalVoice = validGeminiVoices.includes(effectiveVoice) ? effectiveVoice : 'Kore';
+            
             const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash-preview-tts",
+                model: "gemini-3.1-flash-tts-preview",
                 contents: [{ parts: [{ text: textChunk }] }],
                 config: {
                     responseModalities: [Modality.AUDIO],
                     speechConfig: {
-                        voiceConfig: { prebuiltVoiceConfig: { voiceName: effectiveVoice } },
+                        voiceConfig: { prebuiltVoiceConfig: { voiceName: finalVoice } },
                     },
                 },
             });
-            const data = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
-            console.log(`[TTS] Resposta recebida (${data.length} bytes)`);
-            return data;
+            return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
         } catch (e: any) {
-            console.error(`[TTS] Erro na tentativa ${attempt}:`, e);
-            await wait(Math.pow(2, attempt) * 1000);
-            if (attempt === MAX_RETRIES) throw e;
+            const isQuotaError = e.message?.includes("RESOURCE_EXHAUSTED") || e.message?.includes("429");
+            const backoffTime = isQuotaError ? Math.pow(2, attempt) * 2000 : Math.pow(2, attempt) * 1000;
+            
+            console.warn(`[Gemini TTS] Attempt ${attempt} failed: ${e.message}. Retrying in ${backoffTime}ms...`);
+            await wait(backoffTime);
+            
+            if (attempt === MAX_RETRIES) throw new Error(`Gemini API Quota/Error: ${e.message || "Unknown error"}`, { cause: e });
         }
     }
-    throw new Error("Falha no TTS.");
+    throw new Error("Falha ao chamar API Gemini após múltiplas tentativas.");
 };
 
 export const generateSpeech = async (rawText: string, voice: string): Promise<string> => {
-  const sfxRegex = /(\(.*?\))/g;
-  const parts = rawText.split(sfxRegex);
-  if (parts.length === 1) return await callTTS(rawText, voice, false);
-  const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-  const audioBuffers: AudioBuffer[] = [];
+  try {
+    const sfxRegex = /(\(.*?\))/g;
+    const parts = rawText.split(sfxRegex);
+    
+    if (parts.length === 1) return await callTTS(rawText, voice, false);
+    
+    // Create ctx with specific sample rate for TTS (24kHz is standard for Gemini)
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+    const audioBuffers: AudioBuffer[] = [];
 
-  for (const part of parts) {
-      const segment = part.trim();
-      if (!segment) continue;
-      if (segment.startsWith('(') && segment.endsWith(')')) {
-          const keyword = segment.slice(1, -1);
-          try {
-             const sfxBuffer = await generateProceduralSFX(keyword, ctx);
-             audioBuffers.push(sfxBuffer);
-          } catch (e) {}
-      } else {
-          const ttsBase64 = await callTTS(segment, voice, false);
-          if (ttsBase64) {
-              const ttsBuffer = await decodeAudioData(ttsBase64, ctx);
-              audioBuffers.push(ttsBuffer);
-          }
-      }
+    try {
+        for (const part of parts) {
+            const segment = part.trim();
+            if (!segment) continue;
+            
+            // Minimal delay to prevent burst limit
+            await wait(200);
+
+            if (segment.startsWith('(') && segment.endsWith(')')) {
+                const keyword = segment.slice(1, -1);
+                try {
+                    const sfxBuffer = await generateProceduralSFX(keyword, ctx);
+                    audioBuffers.push(sfxBuffer);
+                } catch (e) {
+                    console.warn(`[Gemini Service] SFX fail: ${keyword}`, e);
+                }
+            } else {
+                const ttsBase64 = await callTTS(segment, voice, false);
+                if (ttsBase64) {
+                    const ttsBuffer = await decodeAudioData(ttsBase64, ctx);
+                    audioBuffers.push(ttsBuffer);
+                }
+            }
+        }
+
+        if (audioBuffers.length === 0) throw new Error("Nenhum áudio gerado.");
+
+        const finalBuffer = concatenateAudioBuffers(audioBuffers, ctx);
+        const wavBlob = (await import("../utils/audioUtils")).audioBufferToWav(finalBuffer);
+        
+        const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const result = (reader.result as string).split(',')[1];
+                resolve(result);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(wavBlob);
+        });
+
+        // Clean up context to avoid browser limits
+        await ctx.close();
+        return base64;
+
+    } catch (innerError) {
+        if (ctx.state !== 'closed') await ctx.close();
+        throw innerError;
+    }
+  } catch (e: any) {
+    console.error("[Gemini Service] Critical Speech Gen Error:", e);
+    throw new Error(e.message || "Falha ao gerar narração. Verifique sua conexão e limites.", { cause: e });
   }
-  const finalBuffer = concatenateAudioBuffers(audioBuffers, ctx);
-  const wavBlob = (await import("../utils/audioUtils")).audioBufferToWav(finalBuffer);
-  return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-      reader.readAsDataURL(wavBlob);
-  });
 };
 
 export const analyzeVoiceQuality = async (audioBase64: string, expectedText: string): Promise<any> => { return { clarityScore: 85, feedback: "Boa dicção." }; };
-export const planComicStory = async (prompt: string, numPages: number): Promise<any[]> => {
-  const ai = getClient();
-  const systemInstruction = `
-    Você é um roteirista de quadrinhos e storyboarder profissional. 
-    Sua tarefa é transformar a ideia do usuário em um storyboard detalhado de ${numPages} páginas.
-    
-    DIRETRIZES CRÍTICAS:
-    1. FIDELIDADE AO TEMA: Se o usuário fala de trânsito, as cenas DEVEM mostrar carros, ruas, semáforos, etc. NUNCA gere paisagens genéricas se não houver relação com o texto.
-    2. DESCRIÇÃO VISUAL: A propriedade 'scene' deve ser uma descrição visual rica e específica para um gerador de imagens (ex: "Uma rua movimentada com carros parados no sinal vermelho, foco em uma placa de Pare").
-    3. TRADUÇÃO DE CONCEITOS: Transforme conceitos abstratos (como leis) em situações visuais concretas.
-    
-    Cada página deve ter:
-    - scene: Descrição visual detalhada e específica da cena.
-    - layout: Sugestão de layout (ex: "Full Page", "3 Panels Grid", "Diagonal Split").
-    - dialogue: O texto que será falado ou escrito em balões. Se não houver fala, use "NO DIALOGUE".
-    
-    Retorne APENAS um JSON array.
-  `;
-
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Crie um storyboard de ${numPages} páginas baseado fielmente nesta história: ${prompt}`,
-      config: {
-        systemInstruction,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              scene: { type: Type.STRING },
-              layout: { type: Type.STRING },
-              dialogue: { type: Type.STRING }
-            },
-            required: ["scene", "layout", "dialogue"]
-          }
-        }
-      }
-    });
-    return JSON.parse(response.text || "[]");
-  } catch (e) {
-    console.error("Plan Story Error", e);
-    return [];
-  }
-};
-
-export const generateImage = async (prompt: string, style: string, referenceImage?: string, layout?: string, dialogue?: string): Promise<string> => {
-  const ai = getClient();
-  
-  // Prompt otimizado para evitar falhas e garantir fidelidade
-  const createPrompt = (p: string) => `
-    QUADRINHO PROFISSIONAL: ${style}
-    CENA OBRIGATÓRIA: ${p}
-    DETALHES: ${layout}. ${dialogue !== "NO DIALOGUE" ? `Balão de fala: ${dialogue}` : ""}
-    AMBIENTE: Urbano, autoescola, carros, instrutor Daniel, aluna Ana.
-    ESTILO: Cinematográfico, emocional, cores vibrantes.
-    NÃO GERE: Paisagens naturais, florestas ou montanhas, a menos que solicitado.
-  `;
-  
-  const contents: any = {
-    parts: [{ text: createPrompt(prompt) }]
-  };
-
-  if (referenceImage) {
-    const mimeType = getMimeTypeFromBase64(referenceImage);
-    const base64Data = referenceImage.split(',')[1] || referenceImage;
-    contents.parts.unshift({
-      inlineData: { mimeType, data: base64Data }
-    });
-  }
-
-  // Tenta primeiro com o modelo mais avançado
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.1-flash-image-preview',
-      contents,
-      config: {
-        imageConfig: {
-          aspectRatio: "3:4",
-          imageSize: "1K"
-        }
-      }
-    });
-
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
-    }
-  } catch (e) {
-    console.warn("Falha no modelo 3.1, tentando 2.5 flash...", e);
-  }
-
-  // Segunda tentativa com modelo mais estável
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
-      contents,
-      config: {
-        imageConfig: { aspectRatio: "3:4" }
-      }
-    });
-
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
-    }
-  } catch (e) {
-    console.error("Erro crítico na geração de imagem:", e);
-  }
-
-  // Se tudo falhar, retorna uma imagem que indica erro visualmente ou tenta um placeholder mais próximo do tema
-  return `https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?q=80&w=600&h=800&auto=format&fit=crop`; // Imagem genérica de direção/carro como último recurso
-};
-
-export const generateAvatarVideo = async (imageBase64: string, prompt: string): Promise<string> => {
-  const ai = getClient();
-  const rawKey = process.env.GEMINI_API_KEY || process.env.API_KEY || "";
-  const apiKey = rawKey.replace(/["'\s]/g, ""); 
-  
-  const mimeType = getMimeTypeFromBase64(imageBase64);
-  const base64Data = imageBase64.split(',')[1] || imageBase64;
-
-  try {
-    let operation = await ai.models.generateVideos({
-      model: 'veo-3.1-fast-generate-preview',
-      prompt: prompt,
-      image: {
-        imageBytes: base64Data,
-        mimeType: mimeType,
-      },
-      config: {
-        numberOfVideos: 1,
-        resolution: '720p',
-        aspectRatio: '9:16'
-      }
-    });
-
-    while (!operation.done) {
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      operation = await ai.operations.getVideosOperation({ operation: operation });
-    }
-
-    const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-    if (!downloadLink) throw new Error("Falha ao obter link do vídeo.");
-
-    const videoResponse = await fetch(downloadLink, {
-      method: 'GET',
-      headers: {
-        'x-goog-api-key': apiKey,
-      },
-    });
-
-    const blob = await videoResponse.blob();
-    return URL.createObjectURL(blob);
-  } catch (e) {
-    console.error("Video Gen Error", e);
-    throw e;
-  }
-};
+export const planComicStory = async (p: string, n: number): Promise<any> => { return []; };
+export const generateImage = async (p: string, s: string, r?: string, l?: string, d?: string): Promise<string> => { return ""; };
+export const generateAvatarVideo = async (i: string, p: string): Promise<string> => { return ""; };
 
 export const generateSongMetadata = async (description: string, lyrics?: string): Promise<any> => {
   const ai = getClient();
@@ -399,5 +353,35 @@ export const generateSongMetadata = async (description: string, lyrics?: string)
       styleTag: description,
       coverColor: "#334155"
     };
+  }
+};
+
+export const summarizeText = async (text: string): Promise<string> => {
+  if (!text.trim()) return text;
+  const ai = getClient();
+
+  const prompt = `
+    Você é um especialista em síntese de conteúdo.
+    Tarefa: Resumir o texto abaixo mantendo os pontos principais, mas reduzindo drasticamente o número de palavras (em cerca de 70-80%).
+    O objetivo é preparar o texto para uma narração curta e objetiva.
+    
+    REGRAS:
+    1. Retorne APENAS o resumo final em Português Brasil.
+    2. Linguagem natural e fluida para áudio.
+    3. Mantenha a essência e os fatos principais.
+    
+    TEXTO PARA RESUMIR:
+    "${text}"
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+    });
+    return response.text || text;
+  } catch (e) {
+    console.error("Erro ao resumir:", e);
+    return text;
   }
 };

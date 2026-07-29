@@ -4,7 +4,14 @@ export enum VoiceName {
   Puck = 'Puck',
   Charon = 'Charon',
   Fenrir = 'Fenrir',
-  Zephyr = 'Zephyr',
+  Aoede = 'Aoede',
+  // OpenAI Voices
+  Alloy = 'Alloy-OI',
+  Echo = 'Echo-OI',
+  Fable = 'Fable-OI',
+  Onyx = 'Onyx-OI',
+  Nova = 'Nova-OI',
+  Shimmer = 'Shimmer-OI',
 }
 
 export enum ToneType {
@@ -13,12 +20,16 @@ export enum ToneType {
   Professional = 'Professional',
   Soothing = 'Soothing',
   Dramatic = 'Dramatic',
+  Romantic = 'Romantic',
+  Suspense = 'Suspense',
   Sales = 'Sales (Black Friday)',
   Preaching = 'Preaching',
-  CarSound = 'Car Sound (Carro de Som)',
-  RadioCommercial = 'Radio Commercial',
-  PromotionalEnergetic = 'Promotional Energetic',
-  StorefrontAnnouncer = 'Storefront Announcer (Porta de Loja)'
+  Storytelling = 'Storytelling',
+  Meditation = 'Meditation',
+  Advertising = 'Advertising',
+  Motivation = 'Motivation',
+  News = 'News',
+  Review = 'Review',
 }
 
 export enum AppMode {
@@ -31,7 +42,7 @@ export enum AppMode {
   Manga = 'Manga',
   Admin = 'Admin',
   VoiceCloning = 'VoiceCloning',
-  PDFReader = 'PDFReader',
+  PDFAudio = 'PDFAudio',
 }
 
 export interface AudioItem {
@@ -82,6 +93,7 @@ export interface PremiumCode {
   isRedeemed: boolean;
   createdAt: number;
   redeemedAt?: number;
+  redeemedBy?: string;
 }
 
 export interface UserStatus {
@@ -123,8 +135,238 @@ export type ComicStyle = 'Manga' | 'American Comic' | 'Pixar 3D' | 'Anime' | 'Sk
 
 export type UserRole = 'user' | 'admin' | 'corporate-admin' | 'corporate-user';
 
+export interface UserProfile {
+  uid: string;
+  email: string;
+  name?: string;
+  phoneNumber?: string;
+  role: UserRole;
+  plan: 'free' | 'premium';
+  narrationsToday: number;
+  createdAt: number;
+  expiryDate?: number | null;
+  companyName?: string;
+  isProfileComplete?: boolean;
+  segment?: string;
+  goal?: string;
+  referral?: string;
+}
+
 export interface UserSession {
   role: UserRole;
   email: string;
   companyName?: string;
+  isProfileComplete?: boolean;
 }
+
+export interface AnalyticsSession {
+  id: string;
+  userId: string;
+  loginAt: number;
+  logoutAt?: number;
+  duration?: number;
+  toolsUsed: { [toolName: string]: number }; // name to seconds
+  date: string; // YYYY-MM-DD
+}
+
+export interface UserFeedback {
+  id?: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  rating: number; // 1-5
+  comment: string;
+  isHighlighted: boolean;
+  createdAt: number;
+}
+
+export interface SmartPlayPreferences {
+  userId: string;
+  selectedCategories: string[];
+  language: 'pt' | 'en' | 'es';
+  scope: 'global' | 'regional';
+  locutionStyle: 'jornal' | 'podcast' | 'radio_fm' | 'jovem' | 'formal' | 'casual' | 'humor' | 'inspirador' | 'institucional';
+  voiceId: string;
+  intervalType: 'tracks' | 'minutes' | 'smart';
+  intervalValue: number; // e.g. 2, 3, 5 tracks or 10, 20, 30, 60 minutes
+  duration: number; // e.g. 15, 30, 45, 60, 90 seconds
+  blockedThemes: string[];
+  isPremiumEnabled: boolean;
+  updatedAt: number;
+}
+
+export interface NewsCache {
+  id: string;
+  category: string;
+  title: string;
+  summary: string;
+  source: string;
+  language: string;
+  scope: string;
+  createdAt: number;
+}
+
+export interface ContentBlock {
+  id: string;
+  category: string;
+  title: string;
+  text: string;
+  audioBase64: string;
+  voice: string;
+  style: string;
+  language: string;
+  duration: number; // seconds
+  createdAt: number;
+}
+
+export interface PlaybackHistory {
+  id: string;
+  userId: string;
+  blockId: string;
+  category: string;
+  action: 'play' | 'like' | 'dislike' | 'skip' | 'never_show_again';
+  playedAt: number;
+  durationPlayed?: number;
+}
+
+export interface GeneratedNarration {
+  id: string;
+  userId: string;
+  text: string;
+  voice: string;
+  audioBase64: string;
+  createdAt: number;
+}
+
+export interface PlaylistInsertion {
+  id: string;
+  userId: string;
+  blockId: string;
+  insertedAt: number;
+  played: boolean;
+}
+
+export interface NewsSource {
+  id: string;
+  name: string;
+  url: string;
+  category: string;
+  trusted: boolean;
+}
+
+export interface SmartPlayCategory {
+  id: string;
+  name: string;
+  icon?: string;
+}
+
+export interface VoiceProfile {
+  id: string;
+  name: string;
+  gender: 'male' | 'female' | 'neutral';
+  tone: string;
+}
+
+export interface ContentHistory {
+  id: string;
+  userId: string;
+  contentId: string;
+  playedAt: number;
+}
+
+export interface BulletinConfig {
+  id?: string;
+  userId: string;
+  isActive: boolean;
+  niche: string;
+  customNiche?: string;
+  city: string;
+  state: string;
+  country: string;
+  intervalMinutes: number;
+  newsCount: number;
+  maxDurationSeconds: number;
+  voice: string;
+  locutionStyle: string;
+  language: 'pt' | 'en' | 'es';
+  temperature: number;
+  bgMusicType: 'library' | 'upload' | 'youtube' | 'none';
+  bgMusicId?: string;
+  bgMusicTitle?: string;
+  bgMusicUrl?: string;
+  bgMusicStartSec?: number;
+  bgMusicEndSec?: number;
+  voiceVolume: number;
+  bgMusicVolume: number;
+  duckingIntensity: number;
+  updatedAt: number;
+}
+
+export interface BulletinBackgroundMusic {
+  id: string;
+  userId: string;
+  title: string;
+  type: 'library' | 'upload' | 'youtube';
+  sourceUrl: string;
+  thumbnailUrl?: string;
+  duration?: number;
+  startSec?: number;
+  endSec?: number;
+  createdAt: number;
+}
+
+export interface BulletinHistoryItem {
+  id: string;
+  userId: string;
+  dateTime: number;
+  niche: string;
+  city: string;
+  state: string;
+  country: string;
+  sources: string[];
+  voiceUsed: string;
+  duration: number;
+  generationStatus: 'Sucesso' | 'Em Andamento' | 'Erro';
+  errorMessage?: string;
+  playbackStatus: 'Na Fila' | 'Reproduzido' | 'Agendado';
+  title: string;
+  script: string;
+  audioBase64?: string;
+}
+
+export interface BulletinUsage {
+  userId: string;
+  dateStr: string;
+  count: number;
+  dailyLimit: number;
+}
+
+export interface DialogueSpeaker {
+  id: 'A' | 'B';
+  name: string;
+  voice: string;
+  tone: string;
+  avatarColor: string;
+}
+
+export interface DialogueLine {
+  id: string;
+  speakerId: 'A' | 'B';
+  text: string;
+  emotion?: string;
+  pauseAfterSec?: number;
+}
+
+export interface DialogueHistoryItem {
+  id: string;
+  userId: string;
+  title: string;
+  situation: string;
+  speakerA: { name: string; voice: string };
+  speakerB: { name: string; voice: string };
+  linesCount: number;
+  duration: number;
+  createdAt: number;
+  audioBase64?: string;
+}
+

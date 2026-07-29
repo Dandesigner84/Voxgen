@@ -289,7 +289,7 @@ const MusicStudio: React.FC<MusicStudioProps> = ({ audioContext, initAudioContex
         ) : (
             <div className="space-y-4 animate-fade-in">
                 <div className="bg-zinc-900 border border-dashed border-zinc-700 rounded-lg p-8 flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-800 transition-colors" onClick={() => fileInputRef.current?.click()}>
-                    <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".mp3,.wav,.m4a,.aac" className="hidden" />
+                    <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".mp3,.wav,.m4a,.aac,.mpeg,.mpg" className="hidden" />
                     <Upload className="text-zinc-400 mb-2" />
                     <span className="text-sm text-zinc-300 font-medium">{uploadedFile ? uploadedFile.name : "Upload Áudio"}</span>
                 </div>

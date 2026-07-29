@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, VolumeX, Play, Pause, Zap } from 'lucide-react';
+import { Mic, MicOff, Zap } from 'lucide-react';
 
 interface VoiceAssistantProps {
   onCommand: (command: 'play' | 'pause' | 'volume_down' | 'volume_up') => void;
@@ -9,8 +8,24 @@ interface VoiceAssistantProps {
 const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onCommand }) => {
   const [isListening, setIsListening] = useState(false);
   const [isActivated, setIsActivated] = useState(false);
-  const [lastTranscript, setLastTranscript] = useState('');
   const recognitionRef = useRef<any>(null);
+
+  function processTranscript(transcript: string) {
+    if (!transcript.includes('voxgen')) return;
+
+    setIsActivated(true);
+    setTimeout(() => setIsActivated(false), 1500);
+
+    if (transcript.includes('tocar') || transcript.includes('play') || transcript.includes('reproduzir')) {
+       onCommand('play');
+    } else if (transcript.includes('pausar') || transcript.includes('parar') || transcript.includes('pause')) {
+       onCommand('pause');
+    } else if (transcript.includes('abaixar') || transcript.includes('baixo') || transcript.includes('diminuir')) {
+       onCommand('volume_down');
+    } else if (transcript.includes('aumentar') || transcript.includes('alto')) {
+       onCommand('volume_up');
+    }
+  }
 
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -20,62 +35,61 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onCommand }) => {
       return;
     }
 
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'pt-BR';
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'pt-BR';
 
-    recognition.onstart = () => setIsListening(true);
-    recognition.onend = () => {
-        setIsListening(false);
-        // Reiniciar automaticamente para escuta contínua
-        if (isListening) recognition.start();
-    };
-
-    recognition.onresult = (event: any) => {
-      let interimTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          const transcript = event.results[i][0].transcript.toLowerCase();
-          processTranscript(transcript);
-        } else {
-          interimTranscript += event.results[i][0].transcript;
-        }
-      }
+      recognition.onstart = () => setIsListening(true);
       
-      // Detecção rápida da palavra de ativação em interim
-      if (interimTranscript.toLowerCase().includes('voxgen')) {
-          setIsActivated(true);
-          setTimeout(() => setIsActivated(false), 2000);
-      }
-    };
+      recognition.onerror = (event: any) => {
+        console.warn("[VoiceAssistant] Erro do SpeechRecognition:", event?.error);
+        setIsListening(false);
+      };
 
-    recognitionRef.current = recognition;
-    recognition.start();
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.onresult = (event: any) => {
+        let interimTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            const transcript = event.results[i][0].transcript.toLowerCase();
+            processTranscript(transcript);
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+        
+        if (interimTranscript.toLowerCase().includes('voxgen')) {
+            setIsActivated(true);
+            setTimeout(() => setIsActivated(false), 2000);
+        }
+      };
+
+      recognitionRef.current = recognition;
+      
+      try {
+        recognition.start();
+      } catch (err) {
+        console.warn("[VoiceAssistant] Não foi possível iniciar voz automaticamente:", err);
+      }
+    } catch (err) {
+      console.warn("[VoiceAssistant] Falha ao instanciar SpeechRecognition:", err);
+    }
 
     return () => {
-      if (recognitionRef.current) recognitionRef.current.stop();
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {
+          // Ignored
+        }
+      }
     };
   }, []);
-
-  const processTranscript = (transcript: string) => {
-    setLastTranscript(transcript);
-    
-    if (!transcript.includes('voxgen')) return;
-
-    setIsActivated(true);
-    setTimeout(() => setIsActivated(false), 1500);
-
-    if (transcript.includes('tocar') || transcript.includes('play') || transcript.includes('reproduzir')) {
-      onCommand('play');
-    } else if (transcript.includes('pausar') || transcript.includes('parar') || transcript.includes('pause')) {
-      onCommand('pause');
-    } else if (transcript.includes('abaixar') || transcript.includes('baixo') || transcript.includes('diminuir')) {
-      onCommand('volume_down');
-    } else if (transcript.includes('aumentar') || transcript.includes('alto')) {
-      onCommand('volume_up');
-    }
-  };
 
   return (
     <div className="fixed bottom-24 right-6 z-[100] flex flex-col items-end gap-3 pointer-events-none">

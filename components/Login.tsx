@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
-import { Mail, Lock, LogIn, UserPlus, ArrowRight, ShieldCheck, Github, Building2, Briefcase, User, CheckCircle, ArrowLeft, Loader2, FileText, Globe, Key, AlertCircle } from 'lucide-react';
+import { Mail, Lock, LogIn, UserPlus, ArrowRight, ShieldCheck, CheckCircle, ArrowLeft, Loader2, Key, AlertCircle, User } from 'lucide-react';
 import { UserRole } from '../types';
 import { verifyCorporateCredentials } from '../services/corporateService';
-import { formatCNPJ, validateCNPJ, sendVerificationCode } from '../services/authService';
+import { sendVerificationCode } from '../services/authService';
 
 interface LoginProps {
   onLogin: (role: UserRole, email: string) => void;
@@ -12,17 +11,16 @@ interface LoginProps {
 type AuthStep = 'login' | 'register_data' | 'register_otp' | 'google_confirm';
 
 interface GoogleTempUser {
-    email: string;
-    name: string;
-    picture: string;
-    idToken: string;
+  email: string;
+  name: string;
+  picture: string;
+  idToken: string;
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [step, setStep] = useState<AuthStep>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
@@ -54,8 +52,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     document.body.appendChild(script);
 
     return () => {
-      const existingScript = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
-      if (existingScript) document.body.removeChild(existingScript);
+      const existingScripts = document.querySelectorAll('script[src="https://accounts.google.com/gsi/client"]');
+      existingScripts.forEach(s => s.remove());
     };
   }, []);
 
@@ -64,52 +62,56 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setError('');
     
     try {
-        const idToken = response.credential;
-        await new Promise(r => setTimeout(r, 1000));
-        
-        const base64Url = idToken.split('.')[1];
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const payload = JSON.parse(window.atob(base64));
+      const idToken = response.credential;
+      await new Promise(r => setTimeout(r, 1000));
+      
+      const base64Url = idToken.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const payload = JSON.parse(window.atob(base64));
 
-        setTempGoogleUser({
-            email: payload.email,
-            name: payload.name,
-            picture: payload.picture,
-            idToken: idToken
-        });
-        
-        setStep('google_confirm');
+      setTempGoogleUser({
+        email: payload.email,
+        name: payload.name,
+        picture: payload.picture,
+        idToken: idToken
+      });
+      
+      setStep('google_confirm');
     } catch (e) {
-        setError('Falha ao verificar identidade com o Google.');
+      setError('Falha ao verificar identidade com o Google.');
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
   const initGoogleLogin = () => {
     if (!(window as any).google) return;
     
-    (window as any).google.accounts.id.initialize({
-      client_id: "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com",
-      callback: handleGoogleIdentityCallback,
-      auto_select: false,
-      use_fedcm_for_prompt: false,
-      itp_support: true,
-    });
-    
-    const googleBtn = document.getElementById("googleBtnManual");
-    if (googleBtn) {
+    try {
+      (window as any).google.accounts.id.initialize({
+        client_id: "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com",
+        callback: handleGoogleIdentityCallback,
+        auto_select: false,
+        use_fedcm_for_prompt: false,
+        itp_support: true,
+      });
+      
+      const googleBtn = document.getElementById("googleBtnManual");
+      if (googleBtn) {
         (window as any).google.accounts.id.renderButton(
-            googleBtn,
-            { theme: "outline", size: "large", width: "100%", text: "continue_with" }
+          googleBtn,
+          { theme: "outline", size: "large", width: "100%", text: "continue_with" }
         );
+      }
+    } catch (err) {
+      console.warn("GSI init warning:", err);
     }
   };
 
   useEffect(() => {
     if (step === 'login') {
-        const timer = setTimeout(initGoogleLogin, 800);
-        return () => clearTimeout(timer);
+      const timer = setTimeout(initGoogleLogin, 800);
+      return () => clearTimeout(timer);
     }
   }, [step]);
 
@@ -118,12 +120,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true);
     
     try {
-        await new Promise(r => setTimeout(r, 1200));
-        onLogin('user', tempGoogleUser.email);
+      await new Promise(r => setTimeout(r, 1200));
+      onLogin('user', tempGoogleUser.email);
     } catch (e) {
-        setError('Erro ao criar sessão. Tente novamente.');
+      setError('Erro ao criar sessão. Tente novamente.');
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -133,19 +135,19 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true);
     await new Promise(r => setTimeout(r, 800));
     if (email === ADM_EMAIL && password === ADM_PASS) {
-        onLogin('admin', email);
-        return;
+      onLogin('admin', email);
+      return;
     }
     if (verifyCorporateCredentials(email, password)) {
-        onLogin('corporate-user', email);
-        return;
+      onLogin('corporate-user', email);
+      return;
     }
     const storedPassword = localStorage.getItem(`user_${email}`);
     if (storedPassword && storedPassword === password) {
-        onLogin(localStorage.getItem(`corp_data_${email}`) ? 'corporate-admin' : 'user', email);
+      onLogin(localStorage.getItem(`corp_data_${email}`) ? 'corporate-admin' : 'user', email);
     } else {
-        setError('Email ou senha incorretos.');
-        setLoading(false);
+      setError('Email ou senha incorretos.');
+      setLoading(false);
     }
   };
 
@@ -156,38 +158,38 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setSuccessMsg('');
 
     if (!regName.trim()) {
-        setError('Por favor, informe seu nome completo.');
-        return;
+      setError('Por favor, informe seu nome completo.');
+      return;
     }
     if (!regEmail.trim() || !regEmail.includes('@')) {
-        setError('Por favor, informe um e-mail válido.');
-        return;
+      setError('Por favor, informe um e-mail válido.');
+      return;
     }
     if (regPassword.length < 6) {
-        setError('A senha deve ter pelo menos 6 caracteres.');
-        return;
+      setError('A senha deve ter pelo menos 6 caracteres.');
+      return;
     }
     if (regPassword !== regConfirmPassword) {
-        setError('As senhas digitadas não coincidem.');
-        return;
+      setError('As senhas digitadas não coincidem.');
+      return;
     }
 
     const existingUser = localStorage.getItem(`user_${regEmail.trim().toLowerCase()}`);
     if (existingUser) {
-        setError('Este e-mail já possui cadastro. Faça login para acessar.');
-        return;
+      setError('Este e-mail já possui cadastro. Faça login para acessar.');
+      return;
     }
 
     setLoading(true);
     try {
-        const code = await sendVerificationCode(regEmail.trim().toLowerCase());
-        setSentOtpCode(code);
-        setStep('register_otp');
-        setSuccessMsg(`Código de verificação enviado para ${regEmail}.`);
+      const code = await sendVerificationCode(regEmail.trim().toLowerCase());
+      setSentOtpCode(code);
+      setStep('register_otp');
+      setSuccessMsg(`Código de verificação enviado para ${regEmail}.`);
     } catch (err) {
-        setError('Falha ao enviar código. Tente novamente.');
+      setError('Falha ao enviar código. Tente novamente.');
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -198,16 +200,15 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
     await new Promise(r => setTimeout(r, 600));
 
-    // Valida código de verificação
     if (otpInput.trim() === sentOtpCode.trim() || otpInput.trim() === '123456') {
-        const cleanEmail = regEmail.trim().toLowerCase();
-        localStorage.setItem(`user_${cleanEmail}`, regPassword);
-        localStorage.setItem(`user_name_${cleanEmail}`, regName.trim());
-        
-        onLogin('user', cleanEmail);
+      const cleanEmail = regEmail.trim().toLowerCase();
+      localStorage.setItem(`user_${cleanEmail}`, regPassword);
+      localStorage.setItem(`user_name_${cleanEmail}`, regName.trim());
+      
+      onLogin('user', cleanEmail);
     } else {
-        setError('Código de verificação incorreto. Verifique seu e-mail.');
-        setLoading(false);
+      setError('Código de verificação incorreto. Verifique seu e-mail.');
+      setLoading(false);
     }
   };
 
@@ -216,13 +217,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setSuccessMsg('');
     setLoading(true);
     try {
-        const code = await sendVerificationCode(regEmail.trim().toLowerCase());
-        setSentOtpCode(code);
-        setSuccessMsg('Novo código enviado com sucesso!');
+      const code = await sendVerificationCode(regEmail.trim().toLowerCase());
+      setSentOtpCode(code);
+      setSuccessMsg('Novo código enviado com sucesso!');
     } catch (e) {
-        setError('Erro ao reenviar código.');
+      setError('Erro ao reenviar código.');
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
