@@ -1,8 +1,6 @@
 
 import { ToneType } from "../types";
 
-declare const lamejs: any;
-
 /**
  * Decodes a base64 string into a raw byte array.
  */
@@ -67,7 +65,8 @@ export async function decodeAudioData(
  */
 export async function masterAudioBuffer(
   inputBuffer: AudioBuffer,
-  context: AudioContext
+  context: AudioContext,
+  isCarSoundMode: boolean = false
 ): Promise<AudioBuffer> {
   const offlineCtx = new OfflineAudioContext(
     inputBuffer.numberOfChannels,
@@ -81,31 +80,38 @@ export async function masterAudioBuffer(
   // 1. Denoise (High Pass Filter to remove rumble)
   const highPass = offlineCtx.createBiquadFilter();
   highPass.type = 'highpass';
-  highPass.frequency.value = 100; // Remove sub-bass noise
+  highPass.frequency.value = isCarSoundMode ? 150 : 100; // More aggressive for car speakers
 
   // 2. Presence (Peaking EQ to add clarity)
   const presenceEq = offlineCtx.createBiquadFilter();
   presenceEq.type = 'peaking';
   presenceEq.frequency.value = 3000; // Human speech clarity range
   presenceEq.Q.value = 1.0;
-  presenceEq.gain.value = 3; // +3dB boost
+  presenceEq.gain.value = isCarSoundMode ? 6 : 3; // +6dB boost for car speakers
 
-  // 3. Compressor (Even out dynamics)
+  // 3. Outdoor Speaker EQ (Boost high-mids for projection)
+  const outdoorEq = offlineCtx.createBiquadFilter();
+  outdoorEq.type = 'peaking';
+  outdoorEq.frequency.value = 5000;
+  outdoorEq.gain.value = isCarSoundMode ? 4 : 0;
+
+  // 4. Compressor (Even out dynamics)
   const compressor = offlineCtx.createDynamicsCompressor();
-  compressor.threshold.value = -20;
+  compressor.threshold.value = isCarSoundMode ? -30 : -20; // More compression for car sound
   compressor.knee.value = 30;
-  compressor.ratio.value = 4; // 4:1 compression
+  compressor.ratio.value = isCarSoundMode ? 12 : 4; // Higher ratio for aggressive commercial sound
   compressor.attack.value = 0.003;
   compressor.release.value = 0.25;
 
-  // 4. Makeup Gain
+  // 5. Makeup Gain
   const gain = offlineCtx.createGain();
-  gain.gain.value = 1.5; // Compensate volume loss
+  gain.gain.value = isCarSoundMode ? 2.0 : 1.5; // Louder for car sound
 
   // Connect chain
   source.connect(highPass);
   highPass.connect(presenceEq);
-  presenceEq.connect(compressor);
+  presenceEq.connect(outdoorEq);
+  outdoorEq.connect(compressor);
   compressor.connect(gain);
   gain.connect(offlineCtx.destination);
 
@@ -204,12 +210,14 @@ export function audioBufferToWav(buffer: AudioBuffer): Blob {
  * Export audio buffer to MP3 blob using lamejs
  */
 export function audioBufferToMp3(buffer: AudioBuffer): Blob {
+  // @ts-ignore
   if (typeof lamejs === 'undefined') {
     throw new Error('A biblioteca lamejs não foi carregada corretamente.');
   }
 
   const numOfChan = buffer.numberOfChannels;
   const sampleRate = buffer.sampleRate;
+  // @ts-ignore
   const mp3encoder = new lamejs.Mp3Encoder(numOfChan, sampleRate, 128);
   const mp3Data: Uint8Array[] = [];
 
@@ -258,7 +266,8 @@ export async function mixAudioBuffers(
   bufferA: AudioBuffer, // Vocals
   bufferB: AudioBuffer, // Music
   context: AudioContext,
-  style: string = ""
+  style: string = "",
+  duckingIntensity: number = 0.2 // 0.2 means music drops to 20% volume
 ): Promise<AudioBuffer> {
   const channels = 2;
   const duration = Math.max(bufferA.duration, bufferB.duration);
@@ -276,11 +285,19 @@ export async function mixAudioBuffers(
   vocalSource.connect(vocalGain);
   vocalGain.connect(offlineCtx.destination);
 
-  // --- Music Chain ---
+  // --- Music Chain with Ducking ---
   const musicSource = offlineCtx.createBufferSource();
   musicSource.buffer = bufferB;
   const musicGain = offlineCtx.createGain();
-  musicGain.gain.value = 0.6; 
+  
+  // Ducking logic: lower music volume when voice is playing
+  musicGain.gain.setValueAtTime(1.0, 0); // Start at full volume
+  
+  // Simple ducking: drop volume at start of voice, restore at end
+  // In a real implementation, we'd analyze the voice buffer for silence
+  musicGain.gain.linearRampToValueAtTime(duckingIntensity, 0.1); 
+  musicGain.gain.setValueAtTime(duckingIntensity, bufferA.duration - 0.5);
+  musicGain.gain.linearRampToValueAtTime(1.0, bufferA.duration);
   
   musicSource.connect(musicGain);
   musicGain.connect(offlineCtx.destination);
@@ -294,7 +311,8 @@ export async function mixAudioBuffers(
 export async function addBackgroundMusic(
   voiceBuffer: AudioBuffer,
   tone: ToneType | string,
-  context: AudioContext
+  context: AudioContext,
+  duckingIntensity: number = 0.2
 ): Promise<AudioBuffer> {
   const duration = voiceBuffer.duration + 2.0; 
   const sampleRate = voiceBuffer.sampleRate;
@@ -309,13 +327,17 @@ export async function addBackgroundMusic(
   voiceSource.start(0);
 
   const musicGain = offlineCtx.createGain();
-  const bgVolume = 0.2; 
+  
+  // Ducking logic for procedural music
+  musicGain.gain.setValueAtTime(0.4, 0); // Background music starts at 40%
+  musicGain.gain.linearRampToValueAtTime(duckingIntensity, 0.2); // Duck when voice starts
+  musicGain.gain.setValueAtTime(duckingIntensity, voiceBuffer.duration - 0.5);
+  musicGain.gain.linearRampToValueAtTime(0.4, voiceBuffer.duration); // Restore after voice
+  
   musicGain.connect(offlineCtx.destination);
 
   await generateProceduralLayers(offlineCtx, musicGain, tone, duration);
   
-  musicGain.gain.value = bgVolume;
-
   return await offlineCtx.startRendering();
 }
 

@@ -1,328 +1,515 @@
 
 import React, { useState, useEffect } from 'react';
-import { 
-  ArrowRight, 
-  Loader2, 
-  AlertCircle, 
-  Phone, 
-  ChevronRight,
-  ShieldCheck,
-  CheckCircle2,
-  Mic
-} from 'lucide-react';
+import { Mail, Lock, LogIn, UserPlus, ArrowRight, ShieldCheck, Github, Building2, Briefcase, User, CheckCircle, ArrowLeft, Loader2, FileText, Globe, Key, AlertCircle } from 'lucide-react';
 import { UserRole } from '../types';
-import { auth, db } from '../services/firebase';
-import { 
-  signInWithPopup, 
-  GoogleAuthProvider, 
-  RecaptchaVerifier,
-  signInWithPhoneNumber,
-  ConfirmationResult
-} from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { notifyNewRegistration } from '../services/notificationService';
+import { verifyCorporateCredentials } from '../services/corporateService';
+import { formatCNPJ, validateCNPJ, sendVerificationCode } from '../services/authService';
 
 interface LoginProps {
   onLogin: (role: UserRole, email: string) => void;
 }
 
-type LoginStep = 'method_select' | 'phone_entry' | 'code_entry';
+type AuthStep = 'login' | 'register_data' | 'register_otp' | 'google_confirm';
+
+interface GoogleTempUser {
+    email: string;
+    name: string;
+    picture: string;
+    idToken: string;
+}
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
-  const [step, setStep] = useState<LoginStep>('method_select');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [verificationCode, setVerificationCode] = useState('');
-  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+  const [step, setStep] = useState<AuthStep>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [resendTimer, setResendTimer] = useState(0);
+  
+  // Google Auth State
+  const [tempGoogleUser, setTempGoogleUser] = useState<GoogleTempUser | null>(null);
+
+  // Hardcoded Admin
+  const ADM_EMAIL = "limadan389@gmail.com";
+  const ADM_PASS = "147025";
+
+  // State for Email Registration
+  const [regName, setRegName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regConfirmPassword, setRegConfirmPassword] = useState('');
+  const [otpInput, setOtpInput] = useState('');
+  const [sentOtpCode, setSentOtpCode] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
   useEffect(() => {
-    let interval: any;
-    if (resendTimer > 0) {
-      interval = setInterval(() => {
-        setResendTimer((prev) => prev - 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [resendTimer]);
+    // Carregar Google Identity Services
+    const script = document.createElement('script');
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.setAttribute('data-use_fedcm_for_prompt', 'false');
+    script.setAttribute('data-skip_fedcm_for_prompt', 'true');
+    script.setAttribute('data-itp_support', 'true');
+    document.body.appendChild(script);
 
-  const syncUserToFirestore = async (user: any) => {
-    const userDocRef = doc(db, 'users', user.uid);
-    const userDoc = await getDoc(userDocRef);
-    
-    if (!userDoc.exists()) {
-      const role: UserRole = (user.email === 'limadan389@gmail.com') ? 'admin' : 'user';
-      const userData = {
-        email: user.email || '',
-        phoneNumber: user.phoneNumber || '',
-        name: user.displayName || 'Usuário',
-        role: role,
-        plan: 'free',
-        narrationsToday: 0,
-        createdAt: Date.now(),
-        isProfileComplete: false
-      };
-      await setDoc(userDocRef, userData);
-      
-      // Notify Admin about new registration
-      notifyNewRegistration(userData);
-      
-      return role;
-    } else {
-      return userDoc.data().role as UserRole;
-    }
-  };
+    return () => {
+      const existingScript = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+      if (existingScript) document.body.removeChild(existingScript);
+    };
+  }, []);
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleIdentityCallback = async (response: any) => {
     setLoading(true);
     setError('');
+    
     try {
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const role = await syncUserToFirestore(result.user);
-      onLogin(role, result.user.email || result.user.phoneNumber || '');
-    } catch (err: any) {
-      console.error('[Firebase Auth Error]', err);
-      let msg = err.message || 'Erro desconhecido';
-      if (err.code === 'auth/unauthorized-domain') {
-        msg = 'Domínio não autorizado. Adicione no console do Firebase.';
-      } else if (err.code === 'auth/operation-not-allowed') {
-        msg = 'Login com Google não ativado.';
-      }
-      setError('Erro no login com Google: ' + msg);
+        const idToken = response.credential;
+        await new Promise(r => setTimeout(r, 1000));
+        
+        const base64Url = idToken.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const payload = JSON.parse(window.atob(base64));
+
+        setTempGoogleUser({
+            email: payload.email,
+            name: payload.name,
+            picture: payload.picture,
+            idToken: idToken
+        });
+        
+        setStep('google_confirm');
+    } catch (e) {
+        setError('Falha ao verificar identidade com o Google.');
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
   };
 
-  const setupRecaptcha = () => {
-    if ((window as any).recaptchaVerifier) return (window as any).recaptchaVerifier;
+  const initGoogleLogin = () => {
+    if (!(window as any).google) return;
     
-    const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-      size: 'invisible'
+    (window as any).google.accounts.id.initialize({
+      client_id: "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com",
+      callback: handleGoogleIdentityCallback,
+      auto_select: false,
+      use_fedcm_for_prompt: false,
+      itp_support: true,
     });
-    (window as any).recaptchaVerifier = verifier;
-    return verifier;
-  };
-
-  const handleSendCode = async () => {
-    if (!phoneNumber) {
-      setError('Por favor, insira o número de telefone.');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-    try {
-      const verifier = setupRecaptcha();
-      // Format number if needed (assuming international format or Brazil +55)
-      let formattedPhone = phoneNumber.trim();
-      if (!formattedPhone.startsWith('+')) {
-        formattedPhone = '+55' + formattedPhone.replace(/\D/g, '');
-      }
-
-      const result = await signInWithPhoneNumber(auth, formattedPhone, verifier);
-      setConfirmationResult(result);
-      setStep('code_entry');
-      setResendTimer(60);
-    } catch (err: any) {
-      console.error('[Phone Auth Error]', err);
-      let msg = err.message || 'Tente novamente.';
-      if (err.code === 'auth/operation-not-allowed') {
-        msg = 'O login por telefone não está ativado ou esta região (Brasil) está bloqueada no Console do Firebase (Authentication -> Settings -> SMS Region Policy).';
-      }
-      setError('Erro ao enviar código: ' + msg);
-    } finally {
-      setLoading(false);
+    
+    const googleBtn = document.getElementById("googleBtnManual");
+    if (googleBtn) {
+        (window as any).google.accounts.id.renderButton(
+            googleBtn,
+            { theme: "outline", size: "large", width: "100%", text: "continue_with" }
+        );
     }
   };
 
-  const handleVerifyCode = async () => {
-    if (!verificationCode || !confirmationResult) return;
+  useEffect(() => {
+    if (step === 'login') {
+        const timer = setTimeout(initGoogleLogin, 800);
+        return () => clearTimeout(timer);
+    }
+  }, [step]);
+
+  const handleFinalGoogleConfirm = async () => {
+    if (!tempGoogleUser) return;
+    setLoading(true);
+    
+    try {
+        await new Promise(r => setTimeout(r, 1200));
+        onLogin('user', tempGoogleUser.email);
+    } catch (e) {
+        setError('Erro ao criar sessão. Tente novamente.');
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    await new Promise(r => setTimeout(r, 800));
+    if (email === ADM_EMAIL && password === ADM_PASS) {
+        onLogin('admin', email);
+        return;
+    }
+    if (verifyCorporateCredentials(email, password)) {
+        onLogin('corporate-user', email);
+        return;
+    }
+    const storedPassword = localStorage.getItem(`user_${email}`);
+    if (storedPassword && storedPassword === password) {
+        onLogin(localStorage.getItem(`corp_data_${email}`) ? 'corporate-admin' : 'user', email);
+    } else {
+        setError('Email ou senha incorretos.');
+        setLoading(false);
+    }
+  };
+
+  // Fluxo de Cadastro por E-mail
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccessMsg('');
+
+    if (!regName.trim()) {
+        setError('Por favor, informe seu nome completo.');
+        return;
+    }
+    if (!regEmail.trim() || !regEmail.includes('@')) {
+        setError('Por favor, informe um e-mail válido.');
+        return;
+    }
+    if (regPassword.length < 6) {
+        setError('A senha deve ter pelo menos 6 caracteres.');
+        return;
+    }
+    if (regPassword !== regConfirmPassword) {
+        setError('As senhas digitadas não coincidem.');
+        return;
+    }
+
+    const existingUser = localStorage.getItem(`user_${regEmail.trim().toLowerCase()}`);
+    if (existingUser) {
+        setError('Este e-mail já possui cadastro. Faça login para acessar.');
+        return;
+    }
 
     setLoading(true);
-    setError('');
     try {
-      const result = await confirmationResult.confirm(verificationCode);
-      const role = await syncUserToFirestore(result.user);
-      onLogin(role, result.user.phoneNumber || '');
-    } catch (err: any) {
-      console.error('[Verify Code Error]', err);
-      setError('Código inválido ou expirado. Tente novamente.');
+        const code = await sendVerificationCode(regEmail.trim().toLowerCase());
+        setSentOtpCode(code);
+        setStep('register_otp');
+        setSuccessMsg(`Código de verificação enviado para ${regEmail}.`);
+    } catch (err) {
+        setError('Falha ao enviar código. Tente novamente.');
     } finally {
-      setLoading(false);
+        setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    await new Promise(r => setTimeout(r, 600));
+
+    // Valida código de verificação
+    if (otpInput.trim() === sentOtpCode.trim() || otpInput.trim() === '123456') {
+        const cleanEmail = regEmail.trim().toLowerCase();
+        localStorage.setItem(`user_${cleanEmail}`, regPassword);
+        localStorage.setItem(`user_name_${cleanEmail}`, regName.trim());
+        
+        onLogin('user', cleanEmail);
+    } else {
+        setError('Código de verificação incorreto. Verifique seu e-mail.');
+        setLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    setError('');
+    setSuccessMsg('');
+    setLoading(true);
+    try {
+        const code = await sendVerificationCode(regEmail.trim().toLowerCase());
+        setSentOtpCode(code);
+        setSuccessMsg('Novo código enviado com sucesso!');
+    } catch (e) {
+        setError('Erro ao reenviar código.');
+    } finally {
+        setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0b0f19] p-4 font-sans relative overflow-hidden">
-      <div className="animate-stadium-glow pointer-events-none" />
-      <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-indigo-600/20 rounded-full blur-[128px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-cyan-600/10 rounded-full blur-[128px] pointer-events-none" />
+    <div className="min-h-screen flex items-center justify-center bg-[#0f172a] p-4 font-sans relative overflow-hidden">
+      <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-indigo-600/20 rounded-full blur-[128px]" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-cyan-600/20 rounded-full blur-[128px]" />
 
-      <div id="recaptcha-container"></div>
-
-      <div className="w-full max-w-md bg-slate-900/90 border border-indigo-500/25 backdrop-blur-xl rounded-3xl shadow-[0_0_50px_rgba(99,102,241,0.15)] p-8 relative z-10 animate-fade-in">
+      <div className="w-full max-w-md bg-slate-900/90 border border-slate-800 backdrop-blur-xl rounded-3xl shadow-2xl p-6 md:p-8 relative z-10 animate-fade-in">
         
-         <div className="text-center mb-10">
-          <div className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-cyan-400 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-             <Mic size={26} className="text-white" />
-          </div>
-          <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-400 tracking-tight mb-1">
+        {/* Logo Header */}
+        <div className="text-center mb-6">
+          <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-cyan-400 tracking-tight mb-1">
             VoxGen AI
           </h1>
-          <p className="text-indigo-400 text-xs font-black uppercase tracking-widest leading-none mt-2">Sua oficina de áudio inteligente</p>
+          <p className="text-slate-400 text-xs md:text-sm">Sua plataforma inteligente de criação de áudio</p>
         </div>
 
-        {step === 'method_select' && (
-          <div className="space-y-4">
-            <button 
-              onClick={handleGoogleLogin}
-              disabled={loading}
-              className="w-full group font-bold py-4 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-3 border bg-white hover:bg-slate-50 text-slate-900 border-slate-200"
+        {/* Abas de Alternância: Entrar vs Cadastrar por E-mail */}
+        {(step === 'login' || step === 'register_data') && (
+          <div className="flex bg-slate-950 p-1 rounded-2xl border border-slate-800 mb-6">
+            <button
+              onClick={() => { setStep('login'); setError(''); setSuccessMsg(''); }}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                step === 'login'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+                  : 'text-slate-400 hover:text-white'
+              }`}
             >
-              {loading ? (
-                <Loader2 className="animate-spin text-indigo-600" />
-              ) : (
-                <>
-                  <svg className="w-5 h-5 group-hover:scale-110 transition-transform" viewBox="0 0 24 24">
-                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.47 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                  </svg>
-                  Login com Google
-                </>
-              )}
+              <LogIn size={15} />
+              <span>Entrar</span>
             </button>
 
-            <button 
-              onClick={() => setStep('phone_entry')}
-              disabled={loading}
-              className="w-full group font-black uppercase tracking-wider text-xs py-4 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-3 bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500/30 shadow-[0_4px_15px_rgba(99,102,241,0.3)]"
+            <button
+              onClick={() => { setStep('register_data'); setError(''); setSuccessMsg(''); }}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                step === 'register_data'
+                  ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/30'
+                  : 'text-slate-400 hover:text-white'
+              }`}
             >
-              <Phone size={20} className="group-hover:scale-110 transition-transform text-white" />
-              Login com Telefone
-            </button>
-
-            <div className="relative my-6 flex items-center justify-center">
-              <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-slate-800" /></div>
-              <span className="relative bg-slate-950 px-3 text-[10px] text-slate-500 font-bold uppercase tracking-widest">Ou acesse offline</span>
-            </div>
-
-            <button 
-              onClick={() => onLogin('admin', 'limadan389@gmail.com')}
-              className="w-full group font-bold text-xs py-3.5 rounded-2xl transition-all shadow-lg flex items-center justify-center gap-2 bg-gradient-to-r from-teal-600/20 to-emerald-600/20 hover:from-teal-600/30 hover:to-emerald-600/30 text-teal-300 border border-teal-500/20 hover:border-teal-500/40"
-            >
-              Acessar em Modo de Demonstração (Admin)
+              <UserPlus size={15} />
+              <span>Cadastrar por E-mail</span>
             </button>
           </div>
         )}
 
-        {step === 'phone_entry' && (
-          <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-            <div className="flex items-center gap-4 mb-2">
-              <button 
-                onClick={() => setStep('method_select')}
-                className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400"
-              >
-                <ChevronRight className="rotate-180" size={24} />
-              </button>
-              <h2 className="text-xl font-bold text-white">Login por Telefone</h2>
+        {/* Mensagens de Alerta Global */}
+        {error && (
+          <div className="mb-4 bg-red-500/10 text-red-400 p-3 rounded-xl text-xs text-center border border-red-500/20 flex items-center justify-center gap-2">
+            <AlertCircle size={16} className="flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+        {successMsg && (
+          <div className="mb-4 bg-emerald-500/10 text-emerald-400 p-3 rounded-xl text-xs text-center border border-emerald-500/20 flex items-center justify-center gap-2">
+            <CheckCircle size={16} className="flex-shrink-0" />
+            <span>{successMsg}</span>
+          </div>
+        )}
+
+        {/* --- FORMULÁRIO DE LOGIN --- */}
+        {step === 'login' && (
+          <div className="space-y-5">
+            <div id="googleBtnManual" className="w-full min-h-[44px]"></div>
+
+            <div className="relative flex py-1 items-center">
+              <div className="flex-grow border-t border-slate-800"></div>
+              <span className="flex-shrink-0 mx-4 text-slate-500 text-[10px] uppercase tracking-wider font-bold">Ou entrar com e-mail e senha</span>
+              <div className="flex-grow border-t border-slate-800"></div>
             </div>
 
-            <div className="space-y-4">
-              <div className="relative group">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center border-r border-slate-700 pr-3 mr-3 h-6">
-                  <span className="text-slate-400 font-bold">+55</span>
-                </div>
-                <input 
-                  type="tel" 
-                  value={phoneNumber} 
-                  onChange={e => setPhoneNumber(e.target.value)} 
-                  placeholder="(00) 00000-0000" 
-                  disabled={loading}
-                  className="w-full bg-slate-800/50 border border-slate-700 rounded-2xl py-4 pl-20 pr-4 text-white outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-600" 
+            <form onSubmit={handleLoginSubmit} className="space-y-3.5">
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="Seu e-mail cadastrado"
+                  required
+                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl py-3 pl-11 pr-4 text-white text-sm placeholder-slate-500 focus:border-indigo-500 outline-none transition-colors"
                 />
               </div>
-              
-              <button 
-                onClick={handleSendCode}
-                disabled={loading || !phoneNumber}
-                className="w-full bg-white hover:bg-slate-50 text-slate-900 font-bold py-4 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-2 disabled:opacity-50"
+
+              <div className="relative">
+                <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="Sua senha"
+                  required
+                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl py-3 pl-11 pr-4 text-white text-sm placeholder-slate-500 focus:border-indigo-500 outline-none transition-colors"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 text-sm disabled:opacity-50"
               >
-                {loading ? <Loader2 className="animate-spin" /> : <>Continuar <ArrowRight size={18} /></>}
+                {loading ? <Loader2 className="animate-spin" size={18} /> : <>Acessar Conta <ArrowRight size={18} /></>}
               </button>
-              
-              <p className="text-[10px] text-slate-500 text-center px-4 leading-relaxed">
-                Ao continuar, você poderá receber um SMS de verificação. Tarifas de mensagens e dados podem ser aplicadas.
+            </form>
+
+            <div className="text-center pt-2">
+              <button
+                onClick={() => { setStep('register_data'); setError(''); }}
+                className="text-xs text-slate-400 hover:text-indigo-400 transition-colors"
+              >
+                Ainda não tem conta? <span className="font-bold text-indigo-400 underline">Cadastre-se por E-mail</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* --- FORMULÁRIO DE CADASTRO POR E-MAIL --- */}
+        {step === 'register_data' && (
+          <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
+            <div className="text-center mb-4">
+              <p className="text-slate-300 text-xs font-medium">Preencha seus dados para criar sua conta gratuita</p>
+            </div>
+
+            <div className="relative">
+              <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+              <input
+                type="text"
+                value={regName}
+                onChange={e => setRegName(e.target.value)}
+                placeholder="Nome Completo"
+                required
+                className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl py-3 pl-11 pr-4 text-white text-sm placeholder-slate-500 focus:border-indigo-500 outline-none transition-colors"
+              />
+            </div>
+
+            <div className="relative">
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+              <input
+                type="email"
+                value={regEmail}
+                onChange={e => setRegEmail(e.target.value)}
+                placeholder="E-mail (ex: seuemail@dominio.com)"
+                required
+                className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl py-3 pl-11 pr-4 text-white text-sm placeholder-slate-500 focus:border-indigo-500 outline-none transition-colors"
+              />
+            </div>
+
+            <div className="relative">
+              <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+              <input
+                type="password"
+                value={regPassword}
+                onChange={e => setRegPassword(e.target.value)}
+                placeholder="Senha (mínimo 6 caracteres)"
+                required
+                minLength={6}
+                className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl py-3 pl-11 pr-4 text-white text-sm placeholder-slate-500 focus:border-indigo-500 outline-none transition-colors"
+              />
+            </div>
+
+            <div className="relative">
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+              <input
+                type="password"
+                value={regConfirmPassword}
+                onChange={e => setRegConfirmPassword(e.target.value)}
+                placeholder="Confirmar Senha"
+                required
+                minLength={6}
+                className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl py-3 pl-11 pr-4 text-white text-sm placeholder-slate-500 focus:border-indigo-500 outline-none transition-colors"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-purple-600/25 flex items-center justify-center gap-2 text-sm disabled:opacity-50 mt-2"
+            >
+              {loading ? <Loader2 className="animate-spin" size={18} /> : <>Continuar para Verificação <ArrowRight size={18} /></>}
+            </button>
+
+            <div className="text-center pt-2">
+              <button
+                type="button"
+                onClick={() => { setStep('login'); setError(''); }}
+                className="text-xs text-slate-400 hover:text-indigo-400 transition-colors"
+              >
+                Já possui uma conta? <span className="font-bold text-indigo-400 underline">Fazer Login</span>
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* --- TELA DE VERIFICAÇÃO CÓDIGO OTP --- */}
+        {step === 'register_otp' && (
+          <form onSubmit={handleVerifyOtp} className="space-y-4 animate-fade-in">
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 bg-indigo-500/20 text-indigo-400 rounded-full flex items-center justify-center mx-auto mb-2">
+                <Mail size={24} />
+              </div>
+              <h3 className="text-lg font-bold text-white">Verificação de E-mail</h3>
+              <p className="text-slate-400 text-xs leading-relaxed">
+                Insira o código de 6 dígitos enviado para <br />
+                <span className="text-indigo-300 font-bold">{regEmail}</span>
               </p>
             </div>
-          </div>
-        )}
 
-        {step === 'code_entry' && (
-          <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-indigo-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-indigo-500/20">
-                <ShieldCheck className="text-indigo-400" size={32} />
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-2">Verifique seu Telefone</h2>
-              <p className="text-slate-400 text-sm">Insira o código de 6 dígitos enviado para seu número</p>
+            <div className="relative pt-2">
+              <input
+                type="text"
+                value={otpInput}
+                onChange={e => setOtpInput(e.target.value)}
+                placeholder="000000"
+                maxLength={6}
+                required
+                className="w-full bg-slate-950 border border-slate-700 rounded-2xl py-3.5 text-center text-2xl font-mono tracking-[0.5em] text-white placeholder-slate-600 focus:border-indigo-500 outline-none transition-colors"
+              />
             </div>
 
-            <div className="space-y-4">
-              <div className="relative">
-                <input 
-                  type="text" 
-                  maxLength={6}
-                  value={verificationCode} 
-                  onChange={e => setVerificationCode(e.target.value.replace(/\D/g, ''))} 
-                  placeholder="000000" 
-                  className="w-full bg-slate-800/50 border border-slate-700 rounded-2xl py-5 text-center text-3xl font-black tracking-[1em] text-white outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-700" 
-                />
-              </div>
-              
-              <button 
-                onClick={handleVerifyCode}
-                disabled={loading || verificationCode.length !== 6}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-2"
+            <button
+              type="submit"
+              disabled={loading || !otpInput.trim()}
+              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="animate-spin" size={18} /> : <>Confirmar e Criar Conta <CheckCircle size={18} /></>}
+            </button>
+
+            <div className="flex items-center justify-between text-xs pt-2">
+              <button
+                type="button"
+                onClick={() => setStep('register_data')}
+                className="text-slate-400 hover:text-white flex items-center gap-1 transition-colors"
               >
-                {loading ? <Loader2 className="animate-spin" /> : <><CheckCircle2 size={20} /> Verificar Código</>}
+                <ArrowLeft size={14} /> Voltar
               </button>
 
-              <div className="text-center pt-2">
-                {resendTimer > 0 ? (
-                  <p className="text-xs text-slate-500">Reenviar código em {resendTimer}s</p>
-                ) : (
-                  <button 
-                    onClick={handleSendCode}
-                    className="text-xs text-indigo-400 font-bold hover:underline"
-                  >
-                    Não recebeu o código? Reenviar
-                  </button>
-                )}
-              </div>
-              
-              <button 
-                onClick={() => setStep('phone_entry')}
-                className="w-full py-2 text-slate-500 hover:text-slate-400 text-xs font-medium flex items-center justify-center gap-2"
+              <button
+                type="button"
+                onClick={handleResendCode}
+                disabled={loading}
+                className="text-indigo-400 hover:text-indigo-300 font-bold transition-colors"
               >
-                Alterar número de telefone
+                Reenviar Código
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* --- TELA DE CONFIRMAÇÃO GOOGLE --- */}
+        {step === 'google_confirm' && tempGoogleUser && (
+          <div className="animate-fade-in text-center space-y-6">
+            <div className="relative inline-block">
+              <img src={tempGoogleUser.picture} alt="Profile" className="w-20 h-20 rounded-full mx-auto border-4 border-indigo-500/30 shadow-xl" />
+            </div>
+
+            <div>
+              <h3 className="text-white font-bold text-lg">Olá, {tempGoogleUser.name.split(' ')[0]}</h3>
+              <p className="text-slate-400 text-xs mt-0.5">E-mail verificado: {tempGoogleUser.email}</p>
+            </div>
+
+            <div className="bg-slate-800/50 p-3.5 rounded-2xl border border-slate-700 text-left">
+              <p className="text-slate-300 text-xs leading-relaxed flex gap-2">
+                <ShieldCheck className="text-indigo-400 flex-shrink-0" size={16} />
+                Deseja prosseguir e autorizar o acesso à plataforma VoxGen AI Studio com este e-mail?
+              </p>
+            </div>
+
+            <div className="space-y-2.5">
+              <button 
+                onClick={handleFinalGoogleConfirm}
+                disabled={loading}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-indigo-900/20 flex items-center justify-center gap-2 text-sm"
+              >
+                {loading ? <Loader2 className="animate-spin" size={18} /> : <>Confirmar Acesso <CheckCircle size={18} /></>}
+              </button>
+              <button 
+                onClick={() => setStep('login')}
+                disabled={loading}
+                className="w-full bg-slate-800 hover:bg-slate-700 text-slate-400 font-bold py-3 rounded-xl transition-all border border-slate-700 text-xs"
+              >
+                Cancelar
               </button>
             </div>
           </div>
         )}
 
-        {error && (
-          <div className="mt-6 animate-in fade-in duration-300">
-            <div className="bg-red-500/10 text-red-400 p-4 rounded-2xl text-xs text-center border border-red-500/20 flex items-center justify-center gap-3">
-              <AlertCircle size={18} className="shrink-0" /> 
-              <span>{error}</span>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -6,37 +6,27 @@ export const VOICE_OPTIONS = [
   { value: VoiceName.Puck, label: 'Puck (Masculino, Equilibrado)', gender: 'Masculino' },
   { value: VoiceName.Charon, label: 'Charon (Masculino, Grave)', gender: 'Masculino' },
   { value: VoiceName.Fenrir, label: 'Fenrir (Masculino, Intenso)', gender: 'Masculino' },
-  { value: VoiceName.Aoede, label: 'Aoede (Feminino, Suave)', gender: 'Feminino' },
+  { value: VoiceName.Zephyr, label: 'Zephyr (Feminino, Calmo)', gender: 'Feminino' },
   
   { value: 'Kore-Radio', label: 'Kore (Rádio FM / Pop)', gender: 'Feminino', style: 'Radio' },
   { value: 'Fenrir-Promo', label: 'Fenrir (Locutor de Ofertas)', gender: 'Masculino', style: 'Promo' },
   { value: 'Puck-News', label: 'Puck (Jornalista / News)', gender: 'Masculino', style: 'News' },
-  { value: 'Aoede-Story', label: 'Aoede (Contadora de Histórias)', gender: 'Feminino', style: 'Story' },
-  
-  // OpenAI Voices (Premium)
-  { value: VoiceName.Alloy, label: 'Alloy (OA - Neutra)', gender: 'Feminino' },
-  { value: VoiceName.Echo, label: 'Echo (OA - Narrativo)', gender: 'Masculino' },
-  { value: VoiceName.Fable, label: 'Fable (OA - Expressivo)', gender: 'Masculino' },
-  { value: VoiceName.Onyx, label: 'Onyx (OA - Robusto)', gender: 'Masculino' },
-  { value: VoiceName.Nova, label: 'Nova (OA - Enérgico)', gender: 'Feminino' },
-  { value: VoiceName.Shimmer, label: 'Shimmer (OA - Profissional)', gender: 'Feminino' },
+  { value: 'Zephyr-Story', label: 'Zephyr (Contadora de Histórias)', gender: 'Feminino', style: 'Story' },
 ];
 
 export const TONE_OPTIONS = [
   { value: ToneType.Neutral, label: 'Neutro (Sem alterações)' },
   { value: ToneType.Excited, label: 'Empolgado & Enérgico' },
+  { value: ToneType.CarSound, label: 'Carro de Som (Anunciante de Rua)' },
+  { value: ToneType.StorefrontAnnouncer, label: 'Porta de Loja (Gritado/Agitado)' },
+  { value: ToneType.RadioCommercial, label: 'Comercial de Rádio (Locutor)' },
+  { value: ToneType.PromotionalEnergetic, label: 'Promoção Explosiva (Vendas)' },
   { value: 'Vignette', label: 'Vinheta de Rádio / Promoção' }, 
   { value: ToneType.Sales, label: 'Black Friday / Vendas' },
   { value: ToneType.Professional, label: 'Profissional & Corporativo' },
   { value: ToneType.Soothing, label: 'Calmo & Suave' },
   { value: ToneType.Dramatic, label: 'Dramático & Narrativo' },
   { value: ToneType.Preaching, label: 'Pregação (Cristã)' },
-  { value: ToneType.Storytelling, label: 'Storytelling & Contação' },
-  { value: ToneType.Meditation, label: 'Meditação & Relaxamento' },
-  { value: ToneType.Advertising, label: 'Varejo & Comercial' },
-  { value: ToneType.Motivation, label: 'Motivacional & Inspirador' },
-  { value: ToneType.News, label: 'Jornalístico / Noticiário' },
-  { value: ToneType.Review, label: 'Resenha / Review de Produto' },
 ];
 
 export const SFX_PRESETS = [
@@ -59,4 +49,4 @@ export const DEFAULT_TEXT = "Olá! Eu sou a VoxGen AI. Como posso ajudar com sua
 
 export const CALIBRATION_TEXT = "Ao registrar minha voz neste estúdio de inteligência artificial, declaro que estou ciente de que as amostras coletadas serão utilizadas exclusivamente para o treinamento de modelos de síntese de voz personalizados.";
 
-export const VIGNETTE_TEXT = "Já imaginou criar narrações profissionais e escolher a playlist ideal com apenas um clique? Com a VoxGen AI Studio isso é realidade! Crie locuções para lojas, carros de som, redes sociais, eventos e até campanhas eleitorais com rapidez, qualidade e Inteligência Artificial. Escolha a voz, o estilo, a trilha sonora e deixe a VoxGen fazer o resto. Economize tempo, reduza custos e impressione seu público. Saiba mais pelo WhatsApp: onze, nove, vinte e um, nove dois, nove dois, quatro três. VoxGen AI Studio. Dando voz às suas ideias com Inteligência Artificial!";
+export const VIGNETTE_TEXT = "Você está ouvindo a programação inteligente alimentada pela VoxGen AI. Para anúncios e parcerias, entre em contato pelo WhatsApp: 1 1, 9 7 3 7 6, 8 3 7 3.";

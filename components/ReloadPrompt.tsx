@@ -1,33 +1,44 @@
-
-import React from 'react';
-import { useRegisterSW } from 'virtual:pwa-register/react';
+import React, { useState, useEffect } from 'react';
 import { RefreshCw, Download, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 const ReloadPrompt: React.FC = () => {
-  const swResult = useRegisterSW({
-    onRegistered(r) {
-      console.log('SW Registered: ', r);
-    },
-    onRegisterError(error) {
-      console.log('SW registration error', error);
-    },
-  });
+  const [offlineReady, setOfflineReady] = useState(false);
+  const [needUpdate, setNeedUpdate] = useState(false);
 
-  // Safe access to swResult to prevent destructuring errors
-  const [offlineReady, setOfflineReady] = swResult?.offlineReady || [false, () => {}];
-  const [needUpdate, setNeedUpdate] = swResult?.needUpdate || [false, () => {}];
-  const updateServiceWorker = swResult?.updateServiceWorker || (() => {});
+  useEffect(() => {
+    // Check if service worker has updates
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistration().then((reg) => {
+        if (reg) {
+          reg.onupdatefound = () => {
+            setNeedUpdate(true);
+          };
+        }
+      }).catch(() => {});
+    }
+  }, []);
 
   const close = () => {
     setOfflineReady(false);
     setNeedUpdate(false);
   };
 
-  // Detect if app is "installed" (standalone mode)
-  const isStandalone = window.matchMedia('(display-mode: standalone)').matches 
+  const reloadPage = () => {
+    if (typeof window !== 'undefined') {
+      window.location.reload();
+    }
+  };
+
+  const isStandalone = typeof window !== 'undefined' && (
+    window.matchMedia('(display-mode: standalone)').matches 
     || (window.navigator as any).standalone 
-    || document.referrer.includes('android-app://');
+    || document.referrer.includes('android-app://')
+  );
+
+  if (!offlineReady && !needUpdate) {
+    return null;
+  }
 
   return (
     <AnimatePresence>
@@ -57,7 +68,7 @@ const ReloadPrompt: React.FC = () => {
                 <div className="flex items-center gap-2 mt-4">
                   {needUpdate && (
                     <button
-                      onClick={() => updateServiceWorker(true)}
+                      onClick={reloadPage}
                       className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-2 w-full justify-center group"
                     >
                       <RefreshCw className="w-3.5 h-3.5 group-hover:rotate-180 transition-transform duration-500" />
@@ -73,7 +84,7 @@ const ReloadPrompt: React.FC = () => {
                   )}
 
                   <button
-                    onClick={() => close()}
+                    onClick={close}
                     className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition-colors"
                   >
                     Fechar

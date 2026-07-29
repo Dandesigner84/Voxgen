@@ -1,15 +1,6 @@
 
-import { db, handleFirestoreError, OperationType } from "./firebase";
-import { 
-  setDoc, 
-  doc, 
-  getDoc,
-  collection,
-  getDocs,
-  query,
-  where,
-  deleteDoc
-} from "firebase/firestore";
+// Simulação de Backend Corporativo usando LocalStorage
+// Em produção, isso seria uma API real (Firebase/Supabase)
 
 export interface CorporateTrack {
   id: string;
@@ -21,80 +12,70 @@ export interface CorporateTrack {
 
 export interface CorporateAccount {
   email: string;
-  password: string;
+  password: string; // Em produção, usar hash/salt
   name: string;
   createdAt: number;
 }
 
-const COLLECTION = 'corporateContent';
-
-export const saveCorporatePlaylist = async (companyId: string, tracks: CorporateTrack[]): Promise<void> => {
-  const path = `${COLLECTION}/${companyId}`;
-  try {
-    await setDoc(doc(db, COLLECTION, companyId), { tracks }, { merge: true });
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
-  }
+const STORAGE_KEYS = {
+  CORP_PLAYLIST: 'voxgen_corp_playlist_v1',
+  CORP_CONFIG: 'voxgen_corp_config_v1', // { vignetteEnabled: boolean }
+  CORP_ACCOUNTS: 'voxgen_corp_accounts_v1'
 };
 
-export const getCorporatePlaylist = async (companyId: string): Promise<CorporateTrack[]> => {
-  const path = `${COLLECTION}/${companyId}`;
-  try {
-    const docSnap = await getDoc(doc(db, COLLECTION, companyId));
-    if (docSnap.exists()) {
-      return docSnap.data().tracks || [];
-    }
-    return [];
-  } catch (error) {
-    handleFirestoreError(error, OperationType.GET, path);
-    return [];
-  }
+// --- Playlist Management ---
+
+export const saveCorporatePlaylist = (tracks: CorporateTrack[]) => {
+  localStorage.setItem(STORAGE_KEYS.CORP_PLAYLIST, JSON.stringify(tracks));
 };
 
-export const setCorporateVignetteStatus = async (companyId: string, enabled: boolean): Promise<void> => {
-  const path = `${COLLECTION}/${companyId}`;
-  try {
-    await setDoc(doc(db, COLLECTION, companyId), { vignetteEnabled: enabled }, { merge: true });
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
-  }
+export const getCorporatePlaylist = (): CorporateTrack[] => {
+  const data = localStorage.getItem(STORAGE_KEYS.CORP_PLAYLIST);
+  return data ? JSON.parse(data) : [];
 };
 
-export const isCorporateVignetteEnabled = async (companyId: string): Promise<boolean> => {
-  const path = `${COLLECTION}/${companyId}`;
-  try {
-    const docSnap = await getDoc(doc(db, COLLECTION, companyId));
-    if (docSnap.exists()) {
-      return docSnap.data().vignetteEnabled !== false;
-    }
-    return true;
-  } catch (error) {
-    handleFirestoreError(error, OperationType.GET, path);
-    return true;
-  }
+export const setCorporateVignetteStatus = (enabled: boolean) => {
+  const config = JSON.parse(localStorage.getItem(STORAGE_KEYS.CORP_CONFIG) || '{}');
+  config.vignetteEnabled = enabled;
+  localStorage.setItem(STORAGE_KEYS.CORP_CONFIG, JSON.stringify(config));
+};
+
+export const isCorporateVignetteEnabled = (): boolean => {
+  const config = JSON.parse(localStorage.getItem(STORAGE_KEYS.CORP_CONFIG) || '{}');
+  // Por padrão, empresas pagantes podem desativar. Aqui simulamos que começa ativado se não definido.
+  return config.vignetteEnabled !== false; 
 };
 
 // --- Team Management (Employees) ---
-// These are stored in the 'users' collection with a 'company' field
 
-export const getCorporateAccounts = async (companyId: string): Promise<CorporateAccount[]> => {
-  try {
-    const q = query(collection(db, 'users'), where("companyName", "==", companyId));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({
-      email: doc.data().email,
-      name: doc.data().name || '',
-      password: '', // Password is not stored in Firestore, handled by Firebase Auth
-      createdAt: doc.data().createdAt || 0
-    }));
-  } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, 'users');
-    return [];
-  }
+export const getCorporateAccounts = (): CorporateAccount[] => {
+  const data = localStorage.getItem(STORAGE_KEYS.CORP_ACCOUNTS);
+  return data ? JSON.parse(data) : [];
 };
 
-export const removeCorporateAccount = async (email: string): Promise<void> => {
-  // Finding user by email is harder without UID. Usually we'd use UID.
-  // In Firebase Auth we delete the user, and then the doc.
-  // This is a placeholder for actual cross-service logic.
+export const addCorporateAccount = (account: Omit<CorporateAccount, 'createdAt'>): { success: boolean; message: string } => {
+  const accounts = getCorporateAccounts();
+  
+  if (accounts.length >= 4) {
+    return { success: false, message: "Limite de 4 contas atingido. Remova uma conta para adicionar outra." };
+  }
+
+  if (accounts.find(a => a.email === account.email)) {
+    return { success: false, message: "Este email já está cadastrado na equipe." };
+  }
+
+  accounts.push({ ...account, createdAt: Date.now() });
+  localStorage.setItem(STORAGE_KEYS.CORP_ACCOUNTS, JSON.stringify(accounts));
+  return { success: true, message: "Conta criada com sucesso." };
+};
+
+export const removeCorporateAccount = (email: string) => {
+  const accounts = getCorporateAccounts().filter(a => a.email !== email);
+  localStorage.setItem(STORAGE_KEYS.CORP_ACCOUNTS, JSON.stringify(accounts));
+};
+
+export const verifyCorporateCredentials = (email: string, password: string): boolean => {
+  const accounts = getCorporateAccounts();
+  const user = accounts.find(a => a.email === email && a.password === password);
+  return !!user;
 };

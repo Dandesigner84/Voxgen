@@ -61,7 +61,7 @@ const MangaStudio: React.FC<MangaStudioProps> = ({ audioContext, initAudioContex
       const storyboard = await planComicStory(storyPrompt, pagesRequested);
       
       setPages([]); // Clear previous
-      const newPages: ComicPage[] = [];
+      let newPages: ComicPage[] = [];
 
       // 2. Loop and Generate Each Page
       for (let i = 0; i < storyboard.length; i++) {

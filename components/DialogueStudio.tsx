@@ -1,858 +1,691 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
-  Users, 
-  Sparkles, 
-  Play, 
-  Pause, 
-  Plus, 
-  Trash2, 
-  ArrowUp, 
-  ArrowDown, 
-  Loader2, 
-  Download, 
-  Clock, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Radio, 
-  Zap
+  Users, MessageSquare, Sparkles, Play, Pause, Plus, Trash2, ArrowUp, ArrowDown, 
+  Volume2, Download, Radio, Send, Loader2, Check, RefreshCw, Wand2, Zap, Layers 
 } from 'lucide-react';
+import { VOICE_OPTIONS, SFX_COMMANDS_HELP } from '../constants';
+import { AudioItem } from '../types';
 import { 
-  DialogueSpeaker, 
-  DialogueLine, 
-  DialogueHistoryItem, 
-  VoiceName
-} from '../types';
-import { 
-  generateDialogueScript, 
-  synthesizeDialogueAudio, 
-  saveDialogueHistoryItem, 
-  getDialogueHistory, 
-  exportDialogueToSmartPlay 
+  SpeakerConfig, DialogueLine, DIALOGUE_PRESETS, 
+  generateDialogueScriptWithAI, generateDialogueAudio 
 } from '../services/dialogueService';
 import { generateSpeech } from '../services/geminiService';
-import { decodeAudioData, audioBufferToMp3 } from '../utils/audioUtils';
+import { decodeAudioData } from '../utils/audioUtils';
 
 interface DialogueStudioProps {
-  audioContext: AudioContext | null;
-  initAudioContext: () => AudioContext;
-  userEmail?: string;
-  userId?: string;
+  onAudioGenerated?: (item: AudioItem) => void;
+  isPremium?: boolean;
 }
 
-// Preset Duos for quick configuration
-const PRESET_DUOS = [
-  {
-    title: "📻 Âncora & Repórter de Rádio",
-    speakerA: { name: "Carlos (Âncora)", voice: VoiceName.Kore, tone: "Jornalístico, Sóbrio e Seguro", avatarColor: "from-blue-600 to-indigo-600" },
-    speakerB: { name: "Mariana (Repórter)", voice: VoiceName.Aoede, tone: "Dinâmica, Entusiasmada e Direta", avatarColor: "from-purple-600 to-pink-600" },
-    defaultSituation: "Âncora no estúdio chama a repórter nas ruas para informar o trânsito e o clima no centro da cidade."
-  },
-  {
-    title: "🎧 Podcast & Entrevista",
-    speakerA: { name: "Apresentador Leo", voice: VoiceName.Puck, tone: "Descontraído, Curioso e Animado", avatarColor: "from-cyan-600 to-blue-600" },
-    speakerB: { name: "Dra. Renata (Especialista)", voice: VoiceName.Kore, tone: "Especialista, Didática e Calma", avatarColor: "from-emerald-600 to-teal-600" },
-    defaultSituation: "Entrevista rápida de podcast discutindo dicas práticas de saúde mental e bem-estar no trabalho."
-  },
-  {
-    title: "🛍️ Comercial de Rádio Divertido",
-    speakerA: { name: "Locutor Vendedor", voice: VoiceName.Fenrir, tone: "Vendedor Impactante, Agitado", avatarColor: "from-amber-600 to-red-600" },
-    speakerB: { name: "Cliente Surpreso", voice: VoiceName.Charon, tone: "Divertido, Espantado com a Promoção", avatarColor: "from-violet-600 to-indigo-600" },
-    defaultSituation: "Cliente surpreso descobre o desconto imperdível do Feirão do Consumidor e o locutor anuncia as ofertas."
-  },
-  {
-    title: "🤝 Atendimento ao Cliente",
-    speakerA: { name: "Cliente com Dúvida", voice: VoiceName.Charon, tone: "Preocupado, Buscando Solução", avatarColor: "from-orange-600 to-amber-600" },
-    speakerB: { name: "Atendente Solícito", voice: VoiceName.Aoede, tone: "Atencioso, Polido e Resolutivo", avatarColor: "from-teal-600 to-emerald-600" },
-    defaultSituation: "Cliente liga tirando dúvida sobre um pedido e o atendente resolve com rapidez e simpatia."
-  }
-];
-
-const DialogueStudio: React.FC<DialogueStudioProps> = ({
-  audioContext,
-  initAudioContext,
-  userId = 'guest_user'
-}) => {
-  // Speakers State
-  const [speakerA, setSpeakerA] = useState<DialogueSpeaker>({
-    id: 'A',
-    name: 'Carlos (Locutor 1)',
-    voice: VoiceName.Kore,
-    tone: 'Jornalístico, Seguro e Impactante',
-    avatarColor: 'from-blue-600 to-indigo-600'
+export const DialogueStudio: React.FC<DialogueStudioProps> = ({ onAudioGenerated, isPremium = true }) => {
+  // Configuração dos Dois Personagens
+  const [speakerA, setSpeakerA] = useState<SpeakerConfig>({
+    id: 'speakerA',
+    roleLabel: 'Vendedor / Atendente',
+    voice: 'Kore'
   });
 
-  const [speakerB, setSpeakerB] = useState<DialogueSpeaker>({
-    id: 'B',
-    name: 'Mariana (Locutor 2)',
-    voice: VoiceName.Aoede,
-    tone: 'Descontraída, Entusiasmada e Amigável',
-    avatarColor: 'from-purple-600 to-pink-600'
+  const [speakerB, setSpeakerB] = useState<SpeakerConfig>({
+    id: 'speakerB',
+    roleLabel: 'Cliente / Ouvinte',
+    voice: 'Zephyr'
   });
 
-  // Situation & Generator State
-  const [situationPrompt, setSituationPrompt] = useState('Uma conversa bem-humorada de rádio entre dois locutores comentando os destaques das novidades da semana e convidando os ouvintes.');
-  const [turnsCount, setTurnsCount] = useState<number>(6);
+  // Linhas do Roteiro
+  const [lines, setLines] = useState<DialogueLine[]>(DIALOGUE_PRESETS[0].lines.map((l, idx) => ({
+    id: `init_${idx}`,
+    speakerId: l.speakerId,
+    text: l.text
+  })));
+
+  // Prompt de Situação para Gerar com IA
+  const [aiSituationPrompt, setAiSituationPrompt] = useState('');
   const [isGeneratingScript, setIsGeneratingScript] = useState(false);
 
-  // Script lines state
-  const [dialogueTitle, setDialogueTitle] = useState('Diálogo de Rádio & Podcast');
-  const [lines, setLines] = useState<DialogueLine[]>([
-    { id: '1', speakerId: 'A', text: 'Fala, pessoal! Sejam muito bem-vindos ao programa de hoje no Smart Play!', emotion: 'Animado', pauseAfterSec: 0.4 },
-    { id: '2', speakerId: 'B', text: 'É isso aí! Hoje temos novidades incríveis pra você que nos acompanha no rádio e nas redes.', emotion: 'Entusiasmada', pauseAfterSec: 0.4 },
-    { id: '3', speakerId: 'A', text: 'Exatamente! Vamos trazer dicas práticas e o melhor do boletim informativo.', emotion: 'Empolgado', pauseAfterSec: 0.4 },
-    { id: '4', speakerId: 'B', text: 'Não saia daí! Fique ligado que o nosso show está apenas começando.', emotion: 'Convidativa', pauseAfterSec: 0.4 }
-  ]);
+  // Sintetização do Áudio Completo
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const [pauseDuration, setPauseDuration] = useState(0.35); // Pausa em segundos entre falas
 
-  // Audio Synthesis & Playback
-  const [isSynthesizing, setIsSynthesizing] = useState(false);
-  const [synthProgress, setSynthProgress] = useState<{ current: number; total: number; speakerName: string } | null>(null);
-  const [generatedBuffer, setGeneratedBuffer] = useState<AudioBuffer | null>(null);
-  const [generatedBase64, setGeneratedBase64] = useState<string | null>(null);
-  const [isPlayingFull, setIsPlayingFull] = useState(false);
-  const [playingLineId, setPlayingLineId] = useState<string | null>(null);
+  // Resultado
+  const [generatedAudioBuffer, setGeneratedAudioBuffer] = useState<AudioBuffer | null>(null);
+  const [generatedAudioBase64, setGeneratedAudioBase64] = useState<string | null>(null);
+  const [isPlayingFullAudio, setIsPlayingFullAudio] = useState(false);
+  const [previewLineId, setPreviewLineId] = useState<string | null>(null);
 
-  // Messages & History
-  const [statusMsg, setStatusMsg] = useState<string | null>(null);
-  const [errMsg, setErrMsg] = useState<string | null>(null);
-  const [history, setHistory] = useState<DialogueHistoryItem[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(true);
+  // Status de Envio para Smart Play
+  const [sentToSmartPlay, setSentToSmartPlay] = useState(false);
 
-  const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  // Refs de Áudio
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const activeSourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
 
-  // Load Dialogue History on Mount
-  useEffect(() => {
-    let isMounted = true;
-    async function loadHist() {
-      try {
-        const list = await getDialogueHistory(userId);
-        if (isMounted) setHistory(list);
-      } catch (e) {
-        console.warn("Erro ao carregar histórico de diálogos:", e);
-      } finally {
-        if (isMounted) setLoadingHistory(false);
-      }
+  const getAudioContext = (): AudioContext => {
+    if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+      audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
     }
-    loadHist();
-    return () => { isMounted = false; };
-  }, [userId]);
-
-  // Apply Preset Duo
-  const handleApplyPreset = (preset: typeof PRESET_DUOS[0]) => {
-    setSpeakerA({ ...preset.speakerA, id: 'A' });
-    setSpeakerB({ ...preset.speakerB, id: 'B' });
-    setSituationPrompt(preset.defaultSituation);
-    setStatusMsg(`Duo "${preset.title}" aplicado com sucesso!`);
-    setTimeout(() => setStatusMsg(null), 3000);
+    if (audioCtxRef.current.state === 'suspended') {
+      audioCtxRef.current.resume();
+    }
+    return audioCtxRef.current;
   };
 
-  // Generate Script via AI
+  // Carregar Preset Pronto
+  const handleLoadPreset = (presetId: string) => {
+    const preset = DIALOGUE_PRESETS.find(p => p.id === presetId);
+    if (!preset) return;
+
+    setSpeakerA({ ...speakerA, roleLabel: preset.speakerA.roleLabel, voice: preset.speakerA.voice });
+    setSpeakerB({ ...speakerB, roleLabel: preset.speakerB.roleLabel, voice: preset.speakerB.voice });
+    setLines(preset.lines.map((l, idx) => ({
+      id: `preset_${Date.now()}_${idx}`,
+      speakerId: l.speakerId,
+      text: l.text
+    })));
+    setGeneratedAudioBuffer(null);
+    setGeneratedAudioBase64(null);
+    setSentToSmartPlay(false);
+  };
+
+  // Gerar Roteiro Inteligente com IA
   const handleGenerateAIScript = async () => {
-    if (!situationPrompt.trim()) {
-      setErrMsg("Digite uma situação ou tema para a IA criar o diálogo.");
-      return;
-    }
-
+    if (!aiSituationPrompt.trim()) return;
     setIsGeneratingScript(true);
-    setErrMsg(null);
-    setStatusMsg(null);
-
     try {
-      const res = await generateDialogueScript({
-        situation: situationPrompt,
+      const generatedLines = await generateDialogueScriptWithAI(
+        aiSituationPrompt,
         speakerA,
-        speakerB,
-        turnsCount
-      });
-
-      setDialogueTitle(res.title);
-      setLines(res.lines);
-      setStatusMsg(`✨ Roteiro com ${res.lines.length} falas criado com sucesso pela IA!`);
-      setTimeout(() => setStatusMsg(null), 4000);
-    } catch (err: any) {
-      console.error("Erro na geração de roteiro por IA:", err);
-      setErrMsg(err.message || "Falha ao gerar o roteiro do diálogo por IA.");
+        speakerB
+      );
+      setLines(generatedLines);
+      setGeneratedAudioBuffer(null);
+      setGeneratedAudioBase64(null);
+      setSentToSmartPlay(false);
+    } catch (err) {
+      console.error("Erro ao gerar roteiro:", err);
     } finally {
       setIsGeneratingScript(false);
     }
   };
 
-  // Add line manually
-  const handleAddLine = (speakerId: 'A' | 'B') => {
+  // Funções de Edição do Roteiro
+  const handleAddLine = (speakerId: 'speakerA' | 'speakerB') => {
     const newLine: DialogueLine = {
-      id: `line_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      id: `line_${Date.now()}`,
       speakerId,
-      text: '',
-      emotion: 'Normal',
-      pauseAfterSec: 0.4
+      text: ''
     };
-    setLines([...lines, newLine]);
+    setLines(prev => [...prev, newLine]);
   };
 
-  // Update line text or parameters
-  const handleUpdateLine = (id: string, updates: Partial<DialogueLine>) => {
-    setLines(lines.map(l => l.id === id ? { ...l, ...updates } : l));
+  const handleUpdateLine = (id: string, text: string) => {
+    setLines(prev => prev.map(l => l.id === id ? { ...l, text } : l));
   };
 
-  // Delete line
+  const handleToggleSpeaker = (id: string) => {
+    setLines(prev => prev.map(l => l.id === id ? { 
+      ...l, 
+      speakerId: l.speakerId === 'speakerA' ? 'speakerB' : 'speakerA' 
+    } : l));
+  };
+
   const handleDeleteLine = (id: string) => {
-    if (lines.length <= 1) {
-      setErrMsg("O diálogo deve conter pelo menos uma fala.");
-      return;
-    }
-    setLines(lines.filter(l => l.id !== id));
+    if (lines.length <= 1) return;
+    setLines(prev => prev.filter(l => l.id !== id));
   };
 
-  // Move line up/down
   const handleMoveLine = (index: number, direction: 'up' | 'down') => {
-    if (direction === 'up' && index === 0) return;
-    if (direction === 'down' && index === lines.length - 1) return;
-
-    const newIndex = direction === 'up' ? index - 1 : index + 1;
-    const copy = [...lines];
-    const temp = copy[index];
-    copy[index] = copy[newIndex];
-    copy[newIndex] = temp;
-    setLines(copy);
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= lines.length) return;
+    const newLines = [...lines];
+    const temp = newLines[index];
+    newLines[index] = newLines[targetIndex];
+    newLines[targetIndex] = temp;
+    setLines(newLines);
   };
 
-  // Play single turn preview
-  const handlePlaySingleLine = async (line: DialogueLine) => {
-    if (playingLineId === line.id) {
-      stopAudio();
-      return;
-    }
+  const handleInsertSFX = (lineId: string, sfx: string) => {
+    setLines(prev => prev.map(l => l.id === lineId ? {
+      ...l,
+      text: l.text ? `${l.text} ${sfx}` : sfx
+    } : l));
+  };
 
+  // Testar Falar uma Linha Individual
+  const handlePreviewLine = async (line: DialogueLine) => {
     if (!line.text.trim()) return;
-
-    const ctx = initAudioContext();
-    stopAudio();
-    setPlayingLineId(line.id);
-
     try {
-      const voice = line.speakerId === 'A' ? speakerA.voice : speakerB.voice;
-      const base64 = await generateSpeech(line.text.trim(), voice);
-      const buffer = await decodeAudioData(base64, ctx);
-
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(ctx.destination);
-      source.onended = () => {
-        setPlayingLineId(null);
-        activeSourceRef.current = null;
-      };
-      source.start(0);
-      activeSourceRef.current = source;
+      setPreviewLineId(line.id);
+      const ctx = getAudioContext();
+      const voice = line.speakerId === 'speakerB' ? speakerB.voice : speakerA.voice;
+      const b64 = await generateSpeech(line.text, voice);
+      if (b64) {
+        const buffer = await decodeAudioData(b64, ctx);
+        if (activeSourceNodeRef.current) {
+          activeSourceNodeRef.current.stop();
+        }
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.onended = () => setPreviewLineId(null);
+        activeSourceNodeRef.current = source;
+        source.start(0);
+      }
     } catch (e) {
-      alert("Erro ao reproduzir fala individual.");
-      setPlayingLineId(null);
+      console.error("Erro ao pré-visualizar linha:", e);
+      setPreviewLineId(null);
     }
   };
 
-  // Synthesize Full Dialogue Audio
-  const handleSynthesizeFullDialogue = async () => {
-    if (lines.length === 0) return;
-
+  // Gerar Áudio Completo do Diálogo
+  const handleGenerateFullDialogue = async () => {
     const validLines = lines.filter(l => l.text.trim().length > 0);
-    if (validLines.length === 0) {
-      setErrMsg("Preencha ao menos uma fala com texto antes de gerar o áudio.");
-      return;
-    }
+    if (validLines.length === 0) return;
 
-    const ctx = initAudioContext();
-    setIsSynthesizing(true);
-    setErrMsg(null);
-    setStatusMsg(null);
-    stopAudio();
+    setIsGeneratingAudio(true);
+    setProgress({ current: 0, total: validLines.length });
+    setSentToSmartPlay(false);
 
     try {
-      const result = await synthesizeDialogueAudio(
+      const ctx = getAudioContext();
+      const result = await generateDialogueAudio(
         validLines,
         speakerA,
         speakerB,
         ctx,
-        (current, total, speakerName) => {
-          setSynthProgress({ current, total, speakerName });
-        }
+        pauseDuration,
+        (current, total) => setProgress({ current, total })
       );
 
-      setGeneratedBuffer(result.audioBuffer);
+      setGeneratedAudioBuffer(result.audioBuffer);
+      setGeneratedAudioBase64(result.audioBase64);
 
-      // Convert full buffer to mp3/wav base64
-      const mp3Blob = audioBufferToMp3(result.audioBuffer);
-      const reader = new FileReader();
-      reader.readAsDataURL(mp3Blob);
-      reader.onloadend = async () => {
-        const fullBase64 = reader.result as string;
-        setGeneratedBase64(fullBase64);
-
-        // Save to Firestore History
-        const histItem: Omit<DialogueHistoryItem, 'id'> = {
-          userId,
-          title: dialogueTitle,
-          situation: situationPrompt,
-          speakerA: { name: speakerA.name, voice: speakerA.voice },
-          speakerB: { name: speakerB.name, voice: speakerB.voice },
-          linesCount: validLines.length,
-          duration: Math.round(result.duration),
-          createdAt: Date.now(),
-          audioBase64: fullBase64
-        };
-
-        const histId = await saveDialogueHistoryItem(histItem);
-        setHistory(prev => [{ id: histId, ...histItem }, ...prev]);
-
-        // Auto export to Smart Play
-        await exportDialogueToSmartPlay({ id: histId, ...histItem }, fullBase64);
-
-        setStatusMsg(`🎉 Diálogo "${dialogueTitle}" sintetizado e exportado para o Smart Play com sucesso!`);
+      // Criar item de áudio final para histórico
+      const titleText = `Diálogo: ${speakerA.roleLabel} & ${speakerB.roleLabel} (${validLines.length} falas)`;
+      const newAudioItem: AudioItem = {
+        id: `dialogue_${Date.now()}`,
+        text: `${titleText}\n\n${result.textSummary}`,
+        voice: `${speakerA.voice} + ${speakerB.voice}`,
+        audioData: result.audioBuffer,
+        createdAt: new Date(),
+        duration: result.duration
       };
-    } catch (err: any) {
-      console.error("Erro na sintetização do diálogo:", err);
-      setErrMsg(err.message || "Erro ao sintetizar o áudio do diálogo.");
+
+      if (onAudioGenerated) {
+        onAudioGenerated(newAudioItem);
+      }
+
+      // Notificar o Smart Play via Custom Event
+      const smartPlayDetail = {
+        id: newAudioItem.id,
+        niche: `💬 Diálogo (${speakerA.roleLabel} / ${speakerB.roleLabel})`,
+        location: 'Vozes Simuladas VoxGen',
+        scriptText: result.textSummary,
+        audioData: result.audioBuffer,
+        audioBase64: result.audioBase64,
+        createdAt: new Date().toISOString(),
+        duration: result.duration,
+        voice: `${speakerA.voice} / ${speakerB.voice}`,
+        generationStatus: 'success',
+        playbackStatus: 'queued'
+      };
+
+      window.dispatchEvent(new CustomEvent('voxgen-boletim-created', { detail: smartPlayDetail }));
+
+    } catch (err) {
+      console.error("Erro ao sintetizar diálogo completo:", err);
     } finally {
-      setIsSynthesizing(false);
-      setSynthProgress(null);
+      setIsGeneratingAudio(false);
     }
   };
 
-  // Stop current playing audio
-  const stopAudio = () => {
-    if (activeSourceRef.current) {
-      try { activeSourceRef.current.stop(); } catch (e) { void e; }
-      activeSourceRef.current = null;
-    }
-    setIsPlayingFull(false);
-    setPlayingLineId(null);
-  };
+  // Reproduzir Áudio Completo
+  const togglePlayFullAudio = () => {
+    if (!generatedAudioBuffer) return;
+    const ctx = getAudioContext();
 
-  // Play full audio buffer
-  const handlePlayFullAudio = () => {
-    if (!generatedBuffer) return;
-
-    if (isPlayingFull) {
-      stopAudio();
-      return;
-    }
-
-    const ctx = initAudioContext();
-    stopAudio();
-    setIsPlayingFull(true);
-
-    const source = ctx.createBufferSource();
-    source.buffer = generatedBuffer;
-    source.connect(ctx.destination);
-    source.onended = () => {
-      setIsPlayingFull(false);
-      activeSourceRef.current = null;
-    };
-    source.start(0);
-    activeSourceRef.current = source;
-  };
-
-  // Download full dialogue MP3
-  const handleDownloadFullMp3 = () => {
-    if (!generatedBuffer) return;
-    try {
-      const mp3Blob = audioBufferToMp3(generatedBuffer);
-      const url = URL.createObjectURL(mp3Blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Dialogo_${dialogueTitle.replace(/\s+/g, '_')}_${Date.now()}.mp3`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      alert("Erro ao baixar o arquivo MP3.");
-    }
-  };
-
-  // Play history item
-  const handlePlayHistoryItem = async (item: DialogueHistoryItem) => {
-    if (!item.audioBase64) return;
-    const ctx = initAudioContext();
-    stopAudio();
-
-    try {
-      const buffer = await decodeAudioData(item.audioBase64, ctx);
+    if (isPlayingFullAudio) {
+      if (activeSourceNodeRef.current) {
+        activeSourceNodeRef.current.stop();
+        activeSourceNodeRef.current = null;
+      }
+      setIsPlayingFullAudio(false);
+    } else {
       const source = ctx.createBufferSource();
-      source.buffer = buffer;
+      source.buffer = generatedAudioBuffer;
       source.connect(ctx.destination);
+      source.onended = () => setIsPlayingFullAudio(false);
+      activeSourceNodeRef.current = source;
       source.start(0);
-      activeSourceRef.current = source;
-    } catch (e) {
-      alert("Erro ao reproduzir diálogo do histórico.");
+      setIsPlayingFullAudio(true);
     }
+  };
+
+  // Baixar Áudio
+  const handleDownload = () => {
+    if (!generatedAudioBase64) return;
+    const link = document.createElement('a');
+    link.href = `data:audio/wav;base64,${generatedAudioBase64}`;
+    link.download = `dialogo_voxgen_${Date.now()}.wav`;
+    link.click();
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-4 space-y-8 animate-fade-in">
-      
-      {/* HEADER BANNER */}
-      <div className="bg-gradient-to-r from-slate-900 via-purple-950/80 to-slate-900 border border-purple-500/30 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-gradient-to-br from-purple-600 via-indigo-600 to-cyan-500 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/20">
-              <Users className="w-7 h-7 text-white" />
+    <div className="space-y-8">
+      {/* Banner de Apresentação */}
+      <div className="bg-gradient-to-r from-indigo-900/60 via-slate-900 to-emerald-900/40 p-6 rounded-3xl border border-indigo-500/30 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
+          <Users size={160} className="text-indigo-300" />
+        </div>
+        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <Users size={14} /> Diálogo Multivoz
+              </span>
+              <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-[10px] font-bold">
+                Novo Recurso
+              </span>
             </div>
-            <div>
-              <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-black text-white tracking-wide">👥 Diálogo entre Vozes (Dupla Locução)</h2>
-                <span className="px-3 py-0.5 rounded-full text-xs font-black bg-purple-500/20 text-purple-300 border border-purple-500/40 uppercase tracking-widest">
-                  Simulação IA
-                </span>
-              </div>
-              <p className="text-slate-400 text-xs md:text-sm mt-1">
-                Combine duas vozes diferentes da plataforma para simular entrevistas, conversas de rádio, comerciais e esquetes.
-              </p>
-            </div>
+            <h2 className="text-2xl font-black text-white tracking-tight">
+              Simulador de Diálogos entre Duas Vozes
+            </h2>
+            <p className="text-sm text-slate-300 max-w-2xl leading-relaxed">
+              Crie conversas dinâmicas para anúncios comerciais, rádios, podcasts, peças de teatro e cenas de atendimento. Monte o roteiro com IA ou escreva linha a linha.
+            </p>
           </div>
         </div>
       </div>
 
-      {/* STATUS & ERROR FEEDBACK */}
-      {statusMsg && (
-        <div className="p-4 bg-emerald-950/60 border border-emerald-500/50 rounded-xl text-emerald-200 text-sm flex items-center gap-3 animate-fade-in shadow-lg">
-          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-          <p className="font-bold">{statusMsg}</p>
-        </div>
-      )}
-
-      {errMsg && (
-        <div className="p-4 bg-red-950/60 border border-red-500/50 rounded-xl text-red-200 text-sm flex items-center gap-3 animate-fade-in shadow-lg">
-          <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
-          <p className="font-bold">{errMsg}</p>
-        </div>
-      )}
-
-      {/* PRESET DUOS SELECTOR */}
-      <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 backdrop-blur-sm space-y-3">
-        <h3 className="text-xs font-extrabold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-          <Zap size={14} className="text-yellow-400" /> Duplas Prontas (Presets Rápidos)
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {PRESET_DUOS.map((p, idx) => (
-            <button
-              key={idx}
-              onClick={() => handleApplyPreset(p)}
-              className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-purple-500/50 text-left transition-all hover:scale-[1.01] group"
-            >
-              <h4 className="text-xs font-bold text-white group-hover:text-purple-300">{p.title}</h4>
-              <p className="text-[10px] text-slate-400 mt-1 line-clamp-2">{p.defaultSituation}</p>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* SPEAKERS CONFIGURATION GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Seção 1: Presets Prontos & Configuração dos Narradores */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* SPEAKER A */}
-        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4 backdrop-blur-sm shadow-xl relative overflow-hidden">
-          <div className="flex items-center gap-3 border-b border-slate-800 pb-3">
-            <div className={`w-8 h-8 rounded-xl bg-gradient-to-r ${speakerA.avatarColor} flex items-center justify-center text-white font-black text-sm`}>
-              A
+        {/* Presets Rápidos */}
+        <div className="lg:col-span-12 bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl">
+          <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+            <Zap size={14} className="text-amber-400" /> Modelos Rápidos de Diálogo
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {DIALOGUE_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                onClick={() => handleLoadPreset(preset.id)}
+                className="p-3.5 bg-slate-800/80 hover:bg-indigo-900/40 border border-slate-700/80 hover:border-indigo-500/50 rounded-2xl text-left transition-all group flex flex-col justify-between"
+              >
+                <div>
+                  <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider block mb-1">
+                    {preset.category}
+                  </span>
+                  <h4 className="text-xs font-bold text-white group-hover:text-indigo-300 transition-colors line-clamp-1">
+                    {preset.title}
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mt-1 line-clamp-2 leading-snug">
+                    {preset.description}
+                  </p>
+                </div>
+                <div className="mt-3 pt-2 border-t border-slate-700/50 flex items-center justify-between text-[10px] text-slate-400">
+                  <span className="truncate">🗣️ {preset.speakerA.roleLabel} & {preset.speakerB.roleLabel}</span>
+                  <span className="text-indigo-400 font-bold group-hover:translate-x-0.5 transition-transform">Usar →</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Configuração de Voz A */}
+        <div className="lg:col-span-6 bg-slate-900 border border-indigo-500/30 rounded-3xl p-6 shadow-xl space-y-4 relative overflow-hidden">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-indigo-600/20 text-indigo-400 rounded-2xl border border-indigo-500/30">
+              <Users size={20} />
             </div>
-            <h3 className="text-base font-extrabold text-white">Locutor / Personagem A</h3>
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                Personagem A <span className="text-xs px-2 py-0.5 bg-indigo-500/20 text-indigo-300 rounded-full">Voz 1</span>
+              </h3>
+              <p className="text-xs text-slate-400">Defina o nome do papel e a voz do primeiro narrador</p>
+            </div>
           </div>
 
           <div className="space-y-3">
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1">Nome do Personagem / Papel</label>
+              <label className="text-xs font-bold text-slate-300 mb-1 block">Nome/Papel no Diálogo</label>
               <input
                 type="text"
-                value={speakerA.name}
-                onChange={(e) => setSpeakerA({ ...speakerA, name: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white"
+                value={speakerA.roleLabel}
+                onChange={(e) => setSpeakerA({ ...speakerA, roleLabel: e.target.value })}
+                placeholder="Ex: Atendente, Locutor A, Vendedor"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1">Voz do Narrador</label>
+              <label className="text-xs font-bold text-slate-300 mb-1 block">Voz do Personagem A</label>
               <select
                 value={speakerA.voice}
-                onChange={(e) => setSpeakerA({ ...speakerA, voice: e.target.value as any })}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white"
+                onChange={(e) => setSpeakerA({ ...speakerA, voice: e.target.value })}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
               >
-                {Object.values(VoiceName).map(v => (
-                  <option key={v} value={v}>{v}</option>
+                {VOICE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
                 ))}
               </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1">Estilo & Personalidade</label>
-              <input
-                type="text"
-                placeholder="Ex: Jornalístico, Entusiasmado, Calmo..."
-                value={speakerA.tone}
-                onChange={(e) => setSpeakerA({ ...speakerA, tone: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white"
-              />
             </div>
           </div>
         </div>
 
-        {/* SPEAKER B */}
-        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4 backdrop-blur-sm shadow-xl relative overflow-hidden">
-          <div className="flex items-center gap-3 border-b border-slate-800 pb-3">
-            <div className={`w-8 h-8 rounded-xl bg-gradient-to-r ${speakerB.avatarColor} flex items-center justify-center text-white font-black text-sm`}>
-              B
+        {/* Configuração de Voz B */}
+        <div className="lg:col-span-6 bg-slate-900 border border-emerald-500/30 rounded-3xl p-6 shadow-xl space-y-4 relative overflow-hidden">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-emerald-600/20 text-emerald-400 rounded-2xl border border-emerald-500/30">
+              <Users size={20} />
             </div>
-            <h3 className="text-base font-extrabold text-white">Locutor / Personagem B</h3>
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                Personagem B <span className="text-xs px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-full">Voz 2</span>
+              </h3>
+              <p className="text-xs text-slate-400">Defina o nome do papel e a voz do segundo narrador</p>
+            </div>
           </div>
 
           <div className="space-y-3">
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1">Nome do Personagem / Papel</label>
+              <label className="text-xs font-bold text-slate-300 mb-1 block">Nome/Papel no Diálogo</label>
               <input
                 type="text"
-                value={speakerB.name}
-                onChange={(e) => setSpeakerB({ ...speakerB, name: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white"
+                value={speakerB.roleLabel}
+                onChange={(e) => setSpeakerB({ ...speakerB, roleLabel: e.target.value })}
+                placeholder="Ex: Cliente, Locutor B, Entrevistado"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1">Voz do Narrador</label>
+              <label className="text-xs font-bold text-slate-300 mb-1 block">Voz do Personagem B</label>
               <select
                 value={speakerB.voice}
-                onChange={(e) => setSpeakerB({ ...speakerB, voice: e.target.value as any })}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white"
+                onChange={(e) => setSpeakerB({ ...speakerB, voice: e.target.value })}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
               >
-                {Object.values(VoiceName).map(v => (
-                  <option key={v} value={v}>{v}</option>
+                {VOICE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
                 ))}
               </select>
             </div>
+          </div>
+        </div>
+      </div>
 
+      {/* Seção 2: Gerador de Roteiro com IA */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-purple-500/20 text-purple-400 rounded-xl">
+              <Wand2 size={18} />
+            </div>
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1">Estilo & Personalidade</label>
-              <input
-                type="text"
-                placeholder="Ex: Descontraído, Amigável, Didático..."
-                value={speakerB.tone}
-                onChange={(e) => setSpeakerB({ ...speakerB, tone: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white"
-              />
+              <h3 className="text-sm font-bold text-white">Criar Roteiro Automático com IA</h3>
+              <p className="text-xs text-slate-400">Descreva a situação desejada e a IA criará o diálogo no tom perfeito</p>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* AI SCRIPT GENERATOR BOX */}
-      <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 backdrop-blur-sm shadow-xl space-y-4">
-        <h3 className="text-base font-extrabold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
-          <Sparkles className="w-5 h-5 text-purple-400" />
-          Gerador de Roteiro de Diálogo por IA
-        </h3>
-
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xs font-bold text-slate-300 mb-1">Situação, Tema ou Contexto do Diálogo</label>
-            <textarea
-              rows={3}
-              value={situationPrompt}
-              onChange={(e) => setSituationPrompt(e.target.value)}
-              placeholder="Descreva a situação que deseja simular. Ex: Dois apresentadores de podcast entrevistando um convidado sobre inteligência artificial no marketing..."
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-xs text-white focus:border-purple-500 focus:outline-none leading-relaxed"
-            />
-          </div>
-
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div className="flex items-center gap-3">
-              <label className="text-xs font-bold text-slate-300">Qtd. de Falas:</label>
-              <select
-                value={turnsCount}
-                onChange={(e) => setTurnsCount(Number(e.target.value))}
-                className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white"
-              >
-                <option value={4}>4 falas (Curto / Vinheta)</option>
-                <option value={6}>6 falas (Padrão Rádio)</option>
-                <option value={8}>8 falas (Podcast Rápido)</option>
-                <option value={10}>10 falas (Conversa Detalhada)</option>
-              </select>
-            </div>
-
-            <button
-              onClick={handleGenerateAIScript}
-              disabled={isGeneratingScript || !situationPrompt.trim()}
-              className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 text-white font-black text-xs flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
-            >
-              {isGeneratingScript ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Criando Roteiro com IA...
-                </>
-              ) : (
-                <>
-                  <Sparkles size={16} />
-                  Criar Roteiro do Diálogo
-                </>
-              )}
-            </button>
-          </div>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <input
+            type="text"
+            value={aiSituationPrompt}
+            onChange={(e) => setAiSituationPrompt(e.target.value)}
+            placeholder="Ex: Cliente reclamando do preço da pizza e o atendente oferecendo promoção de 2 pizzas pelo preço de 1..."
+            className="flex-grow bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+          />
+          <button
+            onClick={handleGenerateAIScript}
+            disabled={isGeneratingScript || !aiSituationPrompt.trim()}
+            className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold text-xs rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20 transition-all flex-shrink-0"
+          >
+            {isGeneratingScript ? (
+              <>
+                <Loader2 size={16} className="animate-spin" /> Gerando Roteiro...
+              </>
+            ) : (
+              <>
+                <Sparkles size={16} /> Gerar Roteiro Inteligente
+              </>
+            )}
+          </button>
         </div>
       </div>
 
-      {/* SCRIPT LINES EDITOR */}
-      <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 backdrop-blur-sm shadow-xl space-y-4">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-800 pb-3">
+      {/* Seção 3: Editor Interativo de Falas (Linha a Linha) */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-5">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
           <div>
-            <span className="text-[10px] text-slate-400 uppercase font-extrabold tracking-wider">Título do Diálogo</span>
-            <input
-              type="text"
-              value={dialogueTitle}
-              onChange={(e) => setDialogueTitle(e.target.value)}
-              className="block bg-transparent text-lg font-black text-white focus:outline-none w-full border-b border-dashed border-slate-700 pb-1"
-            />
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <MessageSquare size={18} className="text-indigo-400" /> Editor de Falas do Diálogo
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Edite o texto de cada participante, altere a ordem e teste a narração individual de cada linha.
+            </p>
           </div>
-
           <div className="flex items-center gap-2">
             <button
-              onClick={() => handleAddLine('A')}
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold flex items-center gap-1"
+              onClick={() => handleAddLine('speakerA')}
+              className="px-3 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
             >
-              <Plus size={14} /> + Fala {speakerA.name}
+              <Plus size={14} /> + Fala ({speakerA.roleLabel})
             </button>
             <button
-              onClick={() => handleAddLine('B')}
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-bold flex items-center gap-1"
+              onClick={() => handleAddLine('speakerB')}
+              className="px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
             >
-              <Plus size={14} /> + Fala {speakerB.name}
+              <Plus size={14} /> + Fala ({speakerB.roleLabel})
             </button>
           </div>
         </div>
 
-        {/* LINES LIST */}
-        <div className="space-y-3">
-          {lines.map((line, idx) => {
-            const isA = line.speakerId === 'A';
-            const speaker = isA ? speakerA : speakerB;
+        {/* Lista de Linhas do Diálogo */}
+        <div className="space-y-3.5">
+          {lines.map((line, index) => {
+            const isSpeakerA = line.speakerId === 'speakerA';
+            const speakerConfig = isSpeakerA ? speakerA : speakerB;
 
             return (
               <div
                 key={line.id}
-                className={`p-4 rounded-xl border transition-all ${
-                  isA 
-                    ? 'bg-slate-950/80 border-indigo-500/30' 
-                    : 'bg-slate-950/80 border-purple-500/30'
+                className={`p-4 rounded-2xl border transition-all ${
+                  isSpeakerA
+                    ? 'bg-slate-800/80 border-indigo-500/30 hover:border-indigo-500/50'
+                    : 'bg-slate-800/80 border-emerald-500/30 hover:border-emerald-500/50'
                 }`}
               >
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-2">
+                <div className="flex items-center justify-between gap-3 mb-2.5">
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => handleUpdateLine(line.id, { speakerId: isA ? 'B' : 'A' })}
-                      className={`px-3 py-1 rounded-lg text-xs font-black text-white flex items-center gap-1.5 bg-gradient-to-r ${speaker.avatarColor}`}
-                      title="Clique para alternar o locutor desta fala"
+                      onClick={() => handleToggleSpeaker(line.id)}
+                      className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all ${
+                        isSpeakerA
+                          ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 hover:bg-indigo-600/50'
+                          : 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-600/50'
+                      }`}
+                      title="Clique para alternar o participante desta fala"
                     >
-                      <Users size={12} /> {speaker.name} ({speaker.voice})
+                      <Users size={12} />
+                      {speakerConfig.roleLabel} ({speakerConfig.voice})
+                      <RefreshCw size={10} className="ml-1 opacity-70" />
                     </button>
-
-                    <span className="text-[10px] text-slate-400 font-semibold">
-                      Fala #{idx + 1}
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      #{index + 1}
                     </span>
                   </div>
 
-                  {/* LINE CONTROLS */}
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center gap-1">
+                    {/* Botão de Testar Linha Individual */}
                     <button
-                      onClick={() => handlePlaySingleLine(line)}
-                      className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold flex items-center gap-1 ${
-                        playingLineId === line.id
-                          ? 'bg-red-500/20 border-red-500 text-red-300'
-                          : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800'
-                      }`}
+                      onClick={() => handlePreviewLine(line)}
+                      disabled={previewLineId === line.id || !line.text.trim()}
+                      className="p-2 bg-slate-700/60 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1"
+                      title="Ouvir prévia apenas desta fala"
                     >
-                      {playingLineId === line.id ? <Pause size={12} /> : <Play size={12} />} Ouvir Fala
+                      {previewLineId === line.id ? (
+                        <Loader2 size={12} className="animate-spin text-indigo-400" />
+                      ) : (
+                        <Volume2 size={12} />
+                      )}
+                      <span className="hidden sm:inline text-[11px]">Testar Fala</span>
                     </button>
 
+                    {/* Mover Linha */}
                     <button
-                      onClick={() => handleMoveLine(idx, 'up')}
-                      disabled={idx === 0}
-                      className="p-1.5 bg-slate-900 text-slate-400 hover:text-white rounded-lg disabled:opacity-30"
+                      onClick={() => handleMoveLine(index, 'up')}
+                      disabled={index === 0}
+                      className="p-1.5 bg-slate-700/40 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg disabled:opacity-30"
                       title="Mover para cima"
                     >
-                      <ArrowUp size={14} />
+                      <ArrowUp size={12} />
                     </button>
-
                     <button
-                      onClick={() => handleMoveLine(idx, 'down')}
-                      disabled={idx === lines.length - 1}
-                      className="p-1.5 bg-slate-900 text-slate-400 hover:text-white rounded-lg disabled:opacity-30"
+                      onClick={() => handleMoveLine(index, 'down')}
+                      disabled={index === lines.length - 1}
+                      className="p-1.5 bg-slate-700/40 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg disabled:opacity-30"
                       title="Mover para baixo"
                     >
-                      <ArrowDown size={14} />
+                      <ArrowDown size={12} />
                     </button>
 
+                    {/* Deletar Linha */}
                     <button
                       onClick={() => handleDeleteLine(line.id)}
-                      className="p-1.5 bg-slate-900 text-red-400 hover:text-red-300 rounded-lg"
-                      title="Excluir fala"
+                      disabled={lines.length <= 1}
+                      className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg disabled:opacity-30 ml-1"
+                      title="Remover fala"
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={12} />
                     </button>
                   </div>
                 </div>
 
+                {/* Input do Texto da Fala */}
                 <textarea
-                  rows={2}
                   value={line.text}
-                  onChange={(e) => handleUpdateLine(line.id, { text: e.target.value })}
-                  placeholder={`Digite a fala de ${speaker.name}...`}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-slate-600 leading-relaxed"
+                  onChange={(e) => handleUpdateLine(line.id, e.target.value)}
+                  placeholder={`Digite a fala de ${speakerConfig.roleLabel}...`}
+                  rows={2}
+                  className="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 resize-none"
                 />
 
-                <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2">
-                  <div className="flex items-center gap-2">
-                    <span>Pausa após a fala:</span>
-                    <select
-                      value={line.pauseAfterSec ?? 0.4}
-                      onChange={(e) => handleUpdateLine(line.id, { pauseAfterSec: Number(e.target.value) })}
-                      className="bg-slate-900 border border-slate-800 rounded px-2 py-0.5 text-[10px] text-white"
+                {/* Tags Rápidas de Efeitos Sonoros */}
+                <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase mr-1">Inserir SFX:</span>
+                  {['(buzina)', '(aplausos)', '(risada)', '(caixa)', '(sino)'].map((sfx) => (
+                    <button
+                      key={sfx}
+                      onClick={() => handleInsertSFX(line.id, sfx)}
+                      className="px-2 py-0.5 bg-slate-900/60 hover:bg-indigo-900/40 border border-slate-700 hover:border-indigo-500/40 rounded-lg text-[10px] text-slate-300 transition-colors"
                     >
-                      <option value={0.2}>0.2s (Rápida)</option>
-                      <option value={0.4}>0.4s (Natural)</option>
-                      <option value={0.8}>0.8s (Média)</option>
-                      <option value={1.2}>1.2s (Pausa Longa)</option>
-                    </select>
-                  </div>
+                      + {sfx}
+                    </button>
+                  ))}
                 </div>
               </div>
             );
           })}
         </div>
 
-        {/* FULL SYNTHESIS BUTTON & PROGRESS */}
-        <div className="pt-4 space-y-4">
-          {synthProgress && (
-            <div className="bg-purple-950/60 border border-purple-500/40 rounded-xl p-4 text-center space-y-2 animate-pulse">
-              <Loader2 className="w-6 h-6 text-purple-400 animate-spin mx-auto" />
-              <p className="text-xs font-bold text-purple-200">
-                Sintetizando fala {synthProgress.current} de {synthProgress.total} (Locutor: {synthProgress.speakerName})...
-              </p>
+        {/* Ajuste de Pausa entre Falas e Botão Principal de Geração */}
+        <div className="pt-4 border-t border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <span className="text-xs font-bold text-slate-400 whitespace-nowrap">Pausa entre falas:</span>
+            <div className="flex items-center gap-1.5">
+              {[0.2, 0.35, 0.5, 0.8].map((sec) => (
+                <button
+                  key={sec}
+                  onClick={() => setPauseDuration(sec)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    pauseDuration === sec
+                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+                      : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                  }`}
+                >
+                  {sec}s
+                </button>
+              ))}
             </div>
-          )}
+          </div>
 
           <button
-            onClick={handleSynthesizeFullDialogue}
-            disabled={isSynthesizing || lines.length === 0}
-            className="w-full py-4 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 text-white font-extrabold text-sm md:text-base flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(168,85,247,0.4)] transition-all disabled:opacity-50 hover:scale-[1.01]"
+            onClick={handleGenerateFullDialogue}
+            disabled={isGeneratingAudio || lines.filter(l => l.text.trim()).length === 0}
+            className="w-full md:w-auto px-8 py-4 bg-gradient-to-r from-indigo-600 via-purple-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 disabled:opacity-50 text-white font-bold text-sm rounded-2xl flex items-center justify-center gap-3 shadow-xl shadow-indigo-500/20 transition-all"
           >
-            {isSynthesizing ? (
+            {isGeneratingAudio ? (
               <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Sintetizando Áudio das Vozes...
+                <Loader2 size={18} className="animate-spin" />
+                Sintetizando Diálogo ({progress.current}/{progress.total})...
               </>
             ) : (
               <>
-                <Radio size={20} />
-                🎙️ Sintetizar Áudio Completo do Diálogo & Enviar ao Smart Play
+                <Sparkles size={18} /> Sintetizar Áudio Completo do Diálogo
               </>
             )}
           </button>
         </div>
+      </div>
 
-        {/* GENERATED MASTER AUDIO PLAYER */}
-        {generatedBuffer && (
-          <div className="bg-slate-950 border border-purple-500/50 rounded-xl p-5 space-y-4 animate-fade-in shadow-2xl">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      {/* Seção 4: Reprodução e Envio do Diálogo Gerado */}
+      {generatedAudioBuffer && (
+        <div className="bg-slate-900 border border-emerald-500/40 rounded-3xl p-6 shadow-2xl space-y-4 animate-fade-in">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-emerald-600/20 text-emerald-400 rounded-2xl border border-emerald-500/30">
+                <Radio size={24} />
+              </div>
               <div>
-                <span className="text-[10px] font-black uppercase text-purple-400 tracking-wider">Áudio Final do Diálogo</span>
-                <h4 className="text-sm font-bold text-white">{dialogueTitle}</h4>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  Áudio do Diálogo Concluído! <Check size={18} className="text-emerald-400" />
+                </h3>
                 <p className="text-xs text-slate-400">
-                  Duração total: <strong className="text-cyan-300">{Math.round(generatedBuffer.duration)}s</strong> | Dupla: {speakerA.voice} & {speakerB.voice}
+                  Duração total: <strong className="text-emerald-300">{Math.round(generatedAudioBuffer.duration)} segundos</strong> • Vozes: {speakerA.roleLabel} & {speakerB.roleLabel}
                 </p>
               </div>
+            </div>
 
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <button
-                  onClick={handlePlayFullAudio}
-                  className={`flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
-                    isPlayingFull
-                      ? 'bg-red-500 text-white'
-                      : 'bg-purple-600 hover:bg-purple-500 text-white'
-                  }`}
-                >
-                  {isPlayingFull ? <Pause size={16} /> : <Play size={16} />}
-                  {isPlayingFull ? 'Pausar Áudio' : 'Ouvir Diálogo Completo'}
-                </button>
+            <span className="px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-xs font-bold">
+              Pronto para Reproduzir
+            </span>
+          </div>
 
-                <button
-                  onClick={handleDownloadFullMp3}
-                  className="px-4 py-2.5 bg-slate-900 border border-slate-700 hover:bg-slate-800 text-emerald-300 rounded-xl text-xs font-bold flex items-center gap-1.5"
-                >
-                  <Download size={16} /> MP3
-                </button>
-              </div>
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <button
+              onClick={togglePlayFullAudio}
+              className="px-6 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition-all"
+            >
+              {isPlayingFullAudio ? (
+                <>
+                  <Pause size={16} /> Pausar
+                </>
+              ) : (
+                <>
+                  <Play size={16} fill="currentColor" /> Ouvir Diálogo Completo
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={handleDownload}
+              className="px-5 py-3.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-2xl font-bold text-xs flex items-center gap-2 transition-all"
+            >
+              <Download size={16} /> Baixar WAV
+            </button>
+
+            <div className="ml-auto text-xs text-slate-400 flex items-center gap-1.5 bg-slate-800/80 px-3.5 py-2.5 rounded-2xl border border-slate-700">
+              <Check size={14} className="text-emerald-400" /> Enviado automaticamente para a Fila do Smart Play
             </div>
           </div>
-        )}
-      </div>
-
-      {/* DIALOGUE HISTORY */}
-      <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 backdrop-blur-sm shadow-xl space-y-4">
-        <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-          <h3 className="text-base font-extrabold text-white flex items-center gap-2">
-            <Clock size={18} className="text-purple-400" />
-            Histórico de Diálogos Gerados
-          </h3>
-          <span className="text-xs text-slate-400 font-semibold">Total: {history.length}</span>
         </div>
-
-        {loadingHistory ? (
-          <div className="p-8 text-center text-slate-400 text-xs">
-            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-purple-400" />
-            Carregando histórico...
-          </div>
-        ) : history.length === 0 ? (
-          <div className="p-8 text-center text-slate-500 text-xs border border-dashed border-slate-800 rounded-xl">
-            Nenhum diálogo foi sintetizado ainda. Crie o seu primeiro diálogo acima!
-          </div>
-        ) : (
-          <div className="space-y-3 max-h-96 overflow-y-auto custom-scrollbar pr-1">
-            {history.map(item => (
-              <div
-                key={item.id}
-                className="bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-all"
-              >
-                <div className="flex-1 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-purple-500/20 text-purple-300 uppercase">
-                      💬 Diálogo
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-mono">
-                      {new Date(item.createdAt).toLocaleString('pt-BR')}
-                    </span>
-                  </div>
-
-                  <h4 className="text-sm font-bold text-white">{item.title}</h4>
-                  <p className="text-xs text-slate-400 line-clamp-1">{item.situation}</p>
-
-                  <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-slate-400">
-                    <span>Voz A: <strong className="text-indigo-300">{item.speakerA.name} ({item.speakerA.voice})</strong></span>
-                    <span>Voz B: <strong className="text-purple-300">{item.speakerB.name} ({item.speakerB.voice})</strong></span>
-                    <span>Falas: <strong className="text-slate-200">{item.linesCount}</strong></span>
-                    <span>Duração: <strong className="text-cyan-300">{item.duration}s</strong></span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => handlePlayHistoryItem(item)}
-                    className="p-2.5 bg-slate-900 border border-slate-700 text-purple-300 hover:bg-slate-800 rounded-xl text-xs font-bold flex items-center gap-1.5"
-                  >
-                    <Play size={14} /> Ouvir
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
+      )}
     </div>
   );
 };
-
-export default DialogueStudio;
