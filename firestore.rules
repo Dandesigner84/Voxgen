@@ -5,211 +5,110 @@ service cloud.firestore {
     // Global Safety Net
     match /{document=**} {
       allow read, write: if false;
-    } 
+    }
 
     // --- Helpers ---
     function isSignedIn() { return request.auth != null; }
-    function isEmailVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
-    function isPlatformAdmin() {
-      return isSignedIn() && request.auth.token.email == 'limadan389@gmail.com' && request.auth.token.email_verified == true;
-    }
-    function isAdmin() { 
-      return isPlatformAdmin() || (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
-    }
-    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
     function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
-    
     function isValidId(id) { 
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
-    }
-
-    // Role check from users collection (if needed as fallback)
-    function hasRole(role) {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
-    }
-
-    // --- Entity Validations ---
-    
-    function isValidUser(data) {
-      return data.keys().hasAll(['email', 'role']) &&
-             data.email is string && data.email.size() <= 100 &&
-             data.role in ['user', 'admin', 'corporate-admin', 'corporate-user'] &&
-             (data.get('name', '') is string) && (data.get('name', '').size() <= 100) &&
-             (data.get('plan', 'free') in ['free', 'premium']) &&
-             (data.get('expiryDate', 0) is number) &&
-             (data.get('narrationsToday', 0) is number) &&
-             (data.get('createdAt', 0) is number) &&
-             (data.get('lastUsageDate', '') is string) &&
-             (data.get('segment', '') is string) &&
-             (data.get('goal', '') is string) &&
-             (data.get('referral', '') is string) &&
-             (data.get('isProfileComplete', true) is bool);
-    }
-
-    function isValidPremiumCode(data) {
-      return data.keys().hasAll(['code', 'days', 'isRedeemed']) &&
-             data.code is string && data.code.size() <= 20 &&
-             data.days is number && data.days > 0 &&
-             data.isRedeemed is bool &&
-             (data.get('redeemedBy', '') is string) &&
-             (data.get('redeemedAt', 0) is number) &&
-             (data.get('createdAt', 0) is number);
-    }
-
-    function isValidNarration(data) {
-      return data.keys().hasAll(['userId', 'text', 'voice', 'audioBase64', 'createdAt']) &&
-             data.userId is string &&
-             data.text is string && data.text.size() <= 10000 &&
-             data.voice is string &&
-             data.audioBase64 is string && data.audioBase64.size() <= 800000 &&
-             data.createdAt is number;
-    }
-
-    function isValidSession(data) {
-      return data.keys().hasAll(['userId', 'loginAt', 'date']) &&
-             data.userId is string &&
-             data.loginAt is number &&
-             data.date is string &&
-             (data.get('logoutAt', 0) is number) &&
-             (data.get('duration', 0) is number) &&
-             (data.get('toolsUsed', {}) is map);
-    }
-
-    function isValidFeedback(data) {
-      return data.keys().hasAll(['userId', 'rating', 'createdAt']) &&
-             data.userId is string &&
-             data.rating is number && data.rating >= 1 && data.rating <= 5 &&
-             data.createdAt is number &&
-             (data.get('userName', '') is string) &&
-             (data.get('userEmail', '') is string) &&
-             (data.get('comment', '') is string) &&
-             (data.get('isHighlighted', false) is bool);
     }
 
     // --- Collection Rules ---
 
     match /admins/{userId} {
-      allow read: if isSignedIn();
-      allow write: if false; // Only manageable via console
+      allow read, write: if true;
     }
 
     match /users/{userId} {
-      allow get: if isOwner(userId) || isAdmin();
-      allow list: if isAdmin();
-      allow create: if isOwner(userId) && isValidUser(incoming()) && (
-        incoming().role != 'admin' || isPlatformAdmin()
-      );
-      allow update: if (isOwner(userId) || isAdmin()) && isValidUser(incoming()) && (
-        isAdmin() || (
-          // Allow updating plan related fields during redemption or normal usage
-          incoming().role == existing().role &&
-          incoming().email == existing().email &&
-          incoming().diff(existing()).affectedKeys().hasAny(['name', 'narrationsToday', 'lastUsageDate', 'role', 'email', 'plan', 'expiryDate', 'createdAt', 'isProfileComplete', 'segment', 'goal', 'referral', 'phoneNumber'])
-        )
-      );
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     match /premiumCodes/{codeId} {
-      allow get: if isSignedIn();
-      allow list: if isAdmin();
-      allow create: if isAdmin() && isValidPremiumCode(incoming());
-      allow update: if (isAdmin() || (
-        isSignedIn() && 
-        !existing().isRedeemed && 
-        incoming().isRedeemed == true &&
-        (incoming().redeemedBy == request.auth.token.email || incoming().redeemedBy == request.auth.token.phone_number) &&
-        incoming().diff(existing()).affectedKeys().hasOnly(['isRedeemed', 'redeemedBy', 'redeemedAt'])
-      )) && isValidPremiumCode(incoming());
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     match /corporateContent/{adminId} {
-      allow read: if isSignedIn() && (isOwner(adminId) || hasRole('corporate-user') || isAdmin());
-      allow write: if isOwner(adminId) || isAdmin();
+      allow read, write: if true;
     }
 
     match /customVoices/{voiceId} {
-      allow read: if (resource.data.category == 'official_approved') || (isSignedIn() && (isOwner(resource.data.userId) || isAdmin()));
-      allow create: if isSignedIn() && isValidId(voiceId) && isOwner(incoming().userId);
-      allow update, delete: if isSignedIn() && isValidId(voiceId) && (isOwner(existing().userId) || isAdmin());
+      allow read, write: if true;
     }
 
     match /narrations/{narrationId} {
-      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isVerified() && isValidId(narrationId) && isOwner(incoming().userId) && isValidNarration(incoming());
-      allow update: if false; // Narrations are immutable
-      allow delete: if isVerified() && (isOwner(existing().userId) || isAdmin());
+      allow read, write: if true;
     }
 
     match /sessions/{sessionId} {
-      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
-      allow create: if isSignedIn() && isOwner(incoming().userId) && isValidSession(incoming());
-      allow update: if isSignedIn() && (isOwner(existing().userId) || isAdmin()) && isValidSession(incoming());
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     match /feedbacks/{feedbackId} {
-      allow read: if true;
-      allow create: if isVerified() && isOwner(incoming().userId) && isValidFeedback(incoming());
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     match /userPreferences/{userId} {
-      allow read, write: if isSignedIn() && isOwner(userId);
+      allow read, write: if true;
     }
 
     match /newsCache/{cacheId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
 
     match /contentBlocks/{blockId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
 
     match /playbackHistory/{historyId} {
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && isOwner(incoming().userId);
-      allow update, delete: if isAdmin();
+      allow read, write: if true;
     }
 
     match /generatedNarrations/{narrationId} {
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && isOwner(incoming().userId);
-      allow update, delete: if isAdmin();
+      allow read, write: if true;
     }
 
     match /playlistInsertions/{insertionId} {
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create, update: if isSignedIn() && isOwner(incoming().userId);
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     match /newsSources/{sourceId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     match /categories/{categoryId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     match /voiceProfiles/{profileId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     match /contentHistory/{historyId} {
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && isOwner(incoming().userId);
-      allow update, delete: if isAdmin();
+      allow read, write: if true;
+    }
+
+    match /bulletinBgMusic/{itemId} {
+      allow read, write: if true;
+    }
+
+    match /bulletinHistory/{itemId} {
+      allow read, write: if true;
+    }
+
+    match /bulletinUsage/{usageId} {
+      allow read, write: if true;
+    }
+
+    match /bulletinConfigs/{userId} {
+      allow read, write: if true;
+    }
+
+    match /dialogueHistory/{historyId} {
+      allow read, write: if true;
     }
   }
 }
+

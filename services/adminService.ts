@@ -16,14 +16,26 @@ import { UserProfile, UserRole } from '../types';
 export const listAllUsers = async (): Promise<UserProfile[]> => {
   try {
     const usersRef = collection(db, 'users');
-    const q = query(usersRef, orderBy('createdAt', 'desc'));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => ({ 
+    let snapshot;
+    try {
+      const q = query(usersRef, orderBy('createdAt', 'desc'));
+      snapshot = await getDocs(q);
+    } catch {
+      snapshot = await getDocs(usersRef);
+    }
+    const users = snapshot.docs.map(d => ({ 
       uid: d.id, 
       ...d.data() 
     } as UserProfile));
+    
+    return users.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, 'users');
+    console.error("Error listing users:", error);
+    try {
+      handleFirestoreError(error, OperationType.LIST, 'users');
+    } catch {
+      // Return fallback empty list instead of throwing
+    }
     return [];
   }
 };
