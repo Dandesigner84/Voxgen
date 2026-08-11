@@ -5,13 +5,10 @@ import {
   doc, 
   getDoc, 
   setDoc, 
-  updateDoc, 
   collection, 
   query, 
   where, 
   getDocs,
-  serverTimestamp,
-  increment,
   runTransaction,
   deleteDoc
 } from "firebase/firestore";
@@ -63,16 +60,37 @@ export const deleteCode = async (codeStr: string): Promise<void> => {
 
 // --- User Logic ---
 
-export const getUserStatus = async (userEmail?: string): Promise<UserStatus> => {
-  const user = auth.currentUser;
-  
-  // Se não houver usuário logado, não adianta tentar ler do Firestore (as regras vão negar)
-  if (!user) {
-    return { plan: 'free', expiryDate: null, narrationsToday: 0 };
+const resolveUserIdAndEmail = async (userEmail?: string): Promise<{ userId: string | null; email: string }> => {
+  const currentAuthUser = auth.currentUser;
+  if (currentAuthUser?.uid) {
+    return { userId: currentAuthUser.uid, email: currentAuthUser.email || userEmail || '' };
   }
 
-  const userId = user.uid;
-  const path = `users/${userId}`;
+  const targetEmail = userEmail?.trim() || '';
+  if (!targetEmail) {
+    return { userId: null, email: '' };
+  }
+
+  try {
+    const q = query(collection(db, 'users'), where('email', '==', targetEmail));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      return { userId: snap.docs[0].id, email: targetEmail };
+    }
+  } catch {
+    // Fallback to sanitized email identifier
+  }
+
+  const sanitized = targetEmail.toLowerCase().replace(/[^a-zA-Z0-9]/g, '_');
+  return { userId: sanitized, email: targetEmail };
+};
+
+export const getUserStatus = async (userEmail?: string): Promise<UserStatus> => {
+  const { userId } = await resolveUserIdAndEmail(userEmail);
+  
+  if (!userId) {
+    return { plan: 'free', expiryDate: null, narrationsToday: 0 };
+  }
 
   try {
     const userDoc = await getDoc(doc(db, 'users', userId));
@@ -95,64 +113,75 @@ export const getUserStatus = async (userEmail?: string): Promise<UserStatus> => 
       narrationsToday
     };
   } catch (error) {
-    // Retorna valores padrão em caso de erro de conexão ou permissão inicial
     console.warn("Status do usuário indisponível no momento", error);
     return { plan: 'free', expiryDate: null, narrationsToday: 0 };
   }
 };
 
-export const redeemCode = async (codeStr: string, userEmail: string): Promise<{ success: boolean; message: string; days?: number }> => {
-  const user = auth.currentUser;
-  if (!user) return { success: false, message: "Você precisa estar logado." };
+export const redeemCode = async (codeStr: string, userEmail?: string): Promise<{ success: boolean; message: string; days?: number }> => {
+  const cleanCode = codeStr.trim().toUpperCase();
+  if (!cleanCode) {
+    return { success: false, message: "Por favor, informe o código do cupom." };
+  }
 
-  const codePath = `premiumCodes/${codeStr}`;
-  const userPath = `users/${user.uid}`;
+  const { userId, email } = await resolveUserIdAndEmail(userEmail);
+  if (!userId) {
+    return { success: false, message: "Você precisa estar logado para resgatar um código." };
+  }
+
+  const codePath = `premiumCodes/${cleanCode}`;
+  const userPath = `users/${userId}`;
 
   try {
     const result = await runTransaction(db, async (transaction) => {
       const codeDoc = await transaction.get(doc(db, codePath));
-      if (!codeDoc.exists() || codeDoc.data().isRedeemed) {
-        throw new Error("Código inválido ou já utilizado.");
+      if (!codeDoc.exists()) {
+        throw new Error("Código promocional inválido ou não encontrado.");
+      }
+      
+      const codeData = codeDoc.data();
+      if (codeData.isRedeemed) {
+        throw new Error("Este código promocional já foi utilizado.");
       }
 
       const userDoc = await transaction.get(doc(db, userPath));
       const userData = userDoc.exists() ? userDoc.data() : { plan: 'free', expiryDate: 0 };
       
-      const codeData = codeDoc.data();
       const currentExpiry = (userData.expiryDate && userData.expiryDate > Date.now()) 
         ? userData.expiryDate 
         : Date.now();
       
-      const newExpiry = currentExpiry + (codeData.days * 24 * 60 * 60 * 1000);
+      const addedDays = codeData.days || 30;
+      const newExpiry = currentExpiry + (addedDays * 24 * 60 * 60 * 1000);
 
       transaction.update(doc(db, codePath), {
         isRedeemed: true,
         redeemedAt: Date.now(),
-        redeemedBy: userEmail
+        redeemedBy: email
       });
 
       transaction.set(doc(db, userPath), {
         ...userData,
         plan: 'premium',
         expiryDate: newExpiry,
-        email: userEmail,
+        email: email || userData.email || '',
         role: userData.role || 'user'
       }, { merge: true });
 
-      return codeData.days;
+      return addedDays;
     });
 
-    return { success: true, message: `Sucesso! ${result} dias de Premium adicionados.`, days: result };
+    return { success: true, message: `Sucesso! ${result} dias de acesso Premium adicionados.`, days: result };
   } catch (error: any) {
-    return { success: false, message: error.message || "Erro ao resgatar código." };
+    return { success: false, message: error.message || "Erro ao resgatar código promocional." };
   }
 };
 
-export const incrementUsage = async (): Promise<number> => {
-  const user = auth.currentUser;
-  if (!user) return 0;
+export const incrementUsage = async (userEmail?: string): Promise<number> => {
+  const { userId } = await resolveUserIdAndEmail(userEmail);
+  if (!userId) return 0;
 
-  const path = `users/${user.uid}`;
+  const path = `users/${userId}`;
   const today = new Date().toDateString();
 
   try {
@@ -174,8 +203,8 @@ export const incrementUsage = async (): Promise<number> => {
   }
 };
 
-export const canGenerateNarration = async (): Promise<{ allowed: boolean; message?: string }> => {
-  const status = await getUserStatus();
+export const canGenerateNarration = async (userEmail?: string): Promise<{ allowed: boolean; message?: string }> => {
+  const status = await getUserStatus(userEmail);
   
   if (status.plan === 'premium') {
     return { allowed: true };
@@ -196,7 +225,7 @@ export const getFormatExpiryDate = (timestamp?: number | null): string => {
   return new Date(timestamp).toLocaleDateString('pt-BR');
 };
 
-export const isSmartPlayerUnlocked = async (): Promise<boolean> => {
-  const status = await getUserStatus();
+export const isSmartPlayerUnlocked = async (userEmail?: string): Promise<boolean> => {
+  const status = await getUserStatus(userEmail);
   return status.plan === 'premium';
 };

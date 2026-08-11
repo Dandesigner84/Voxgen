@@ -33,11 +33,11 @@ interface HomeProps {
 
 const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail }) => {
   const [code, setCode] = useState('');
-  const [status, setStatus] = useState<any>({
-    plan: 'premium',
-    expiryDate: Date.now() + 365 * 24 * 60 * 60 * 1000,
+  const [status, setStatus] = useState<any>(() => ({
+    plan: 'free',
+    expiryDate: null,
     narrationsToday: 0
-  });
+  }));
   const [redeemMsg, setRedeemMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
 

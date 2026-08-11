@@ -29,9 +29,14 @@ const MangaStudio: React.FC<MangaStudioProps> = ({ audioContext, initAudioContex
   const [isPlaying, setIsPlaying] = useState(false);
   const activeSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
-  const userStatus = getUserStatus();
-  const isPremium = userStatus.plan === 'premium';
+  const [isPremium, setIsPremium] = useState(true);
   const MAX_FREE_PAGES = 4;
+
+  useEffect(() => {
+    getUserStatus().then(status => {
+      setIsPremium(status.plan === 'premium');
+    });
+  }, []);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
