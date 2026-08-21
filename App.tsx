@@ -24,7 +24,7 @@ import { AudioItem, ProcessingState, ToneType, VoiceName, AppMode, UserRole, Use
 import { DEFAULT_TEXT, VIGNETTE_TEXT } from './constants';
 import { refineText, generateSpeech, addAutomaticSFX } from './services/geminiService';
 import { decodeAudioData, addBackgroundMusic } from './utils/audioUtils';
-import { canGenerateNarration, incrementUsage } from './services/monetizationService';
+import { canGenerateNarration, incrementUsage, getUserStatus } from './services/monetizationService';
 import { saveNarration, getUserNarrations } from './services/narrationService';
 import { auth, db } from './services/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -349,8 +349,11 @@ const AppContent: React.FC = () => {
   const handleGenerateNarration = async () => {
     stopPreview();
     const isSuperAdmin = user?.email === 'limadan389@gmail.com';
-    if (user?.role !== 'admin' && !isSuperAdmin && user?.role !== 'corporate-admin') {
-        const limitCheck = await canGenerateNarration();
+    const status = await getUserStatus(user?.email);
+    const hasActivePlan = status.plan === 'premium' || user?.role === 'admin' || isSuperAdmin || user?.role === 'corporate-admin';
+
+    if (!hasActivePlan) {
+        const limitCheck = await canGenerateNarration(user?.email);
         if (!limitCheck.allowed) { alert(limitCheck.message); return; }
     }
     const ctx = initAudioContext();
@@ -370,28 +373,26 @@ const AppContent: React.FC = () => {
             saveNarration(auth.currentUser.uid, newItem, base64Data, selectedTone as string);
         }
         
-        // Monetization & Vignette Trigger
-        let currentCount = 0;
-        if (user?.role !== 'admin' && !isSuperAdmin && user?.role !== 'corporate-admin') { 
-            currentCount = await incrementUsage(); 
-        }
-
-        // Trigger CTA Vignette every 5th narration
-        if (currentCount > 0 && currentCount % 5 === 0) {
-            console.log(`[VoxGen CTA] Triggering vignette for narration #${currentCount}`);
-            setTimeout(async () => {
-                try {
-                    const vignetteBase64 = await generateSpeech(VIGNETTE_TEXT, VoiceName.Aoede); 
-                    const vBuffer = await decodeAudioData(vignetteBase64, ctx);
-                    const newItem: AudioItem = { id: `cta-${currentCount}`, text: "[VINHETA CTA] " + VIGNETTE_TEXT, voice: VoiceName.Aoede, audioData: vBuffer, createdAt: new Date(), duration: vBuffer.duration };
-                    setHistory(prev => [newItem, ...prev]);
-                    
-                    const source = ctx.createBufferSource();
-                    source.buffer = vBuffer;
-                    source.connect(masterGainNodeRef.current || ctx.destination);
-                    source.start(0);
-                } catch (e) { console.error("Erro ao reproduzir vinheta CTA", e); }
-            }, 2000);
+        // Monetization & Vignette Trigger - strictly for free plan users only
+        if (!hasActivePlan) { 
+            const currentCount = await incrementUsage(user?.email); 
+            // Trigger CTA Vignette every 5th narration for free tier users only
+            if (currentCount > 0 && currentCount % 5 === 0) {
+                console.log(`[VoxGen CTA] Triggering vignette for free narration #${currentCount}`);
+                setTimeout(async () => {
+                    try {
+                        const vignetteBase64 = await generateSpeech(VIGNETTE_TEXT, VoiceName.Aoede); 
+                        const vBuffer = await decodeAudioData(vignetteBase64, ctx);
+                        const ctaItem: AudioItem = { id: `cta-${currentCount}`, text: "[VINHETA CTA] " + VIGNETTE_TEXT, voice: VoiceName.Aoede, audioData: vBuffer, createdAt: new Date(), duration: vBuffer.duration };
+                        setHistory(prev => [ctaItem, ...prev]);
+                        
+                        const source = ctx.createBufferSource();
+                        source.buffer = vBuffer;
+                        source.connect(masterGainNodeRef.current || ctx.destination);
+                        source.start(0);
+                    } catch (e) { console.error("Erro ao reproduzir vinheta CTA", e); }
+                }, 2000);
+            }
         }
       }
     } catch (err: any) {

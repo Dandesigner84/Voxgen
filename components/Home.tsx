@@ -56,7 +56,19 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail }) => {
       }
     };
     fetchStatus();
-    return () => { isMounted = false; };
+
+    const handlePlanUpdated = async () => {
+      const s = await getUserStatus(userEmail);
+      if (isMounted && s) {
+        setStatus(s);
+      }
+    };
+    window.addEventListener('voxgen_plan_updated', handlePlanUpdated);
+
+    return () => { 
+      isMounted = false; 
+      window.removeEventListener('voxgen_plan_updated', handlePlanUpdated);
+    };
   }, [userEmail]);
 
   const handleRedeem = async () => {
@@ -74,8 +86,11 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail }) => {
     } catch (e: any) {
       setRedeemMsg({ type: 'error', text: 'Falha ao processar código.' });
     }
-    setTimeout(() => setRedeemMsg(null), 5000);
+    setTimeout(() => setRedeemMsg(null), 6000);
   };
+
+  const isSuperAdmin = userEmail === 'limadan389@gmail.com';
+  const isPremiumActive = status?.plan === 'premium' || isAdmin || isSuperAdmin;
 
   return (
     <div className="flex flex-col items-center justify-start min-h-[85vh] w-full max-w-7xl mx-auto px-4 py-6 animate-fade-in space-y-8">
@@ -131,19 +146,28 @@ const Home: React.FC<HomeProps> = ({ onSelectMode, userRole, userEmail }) => {
             </div>
           </div>
 
-          {/* Card de Status de Assinatura */}
+          {/* Card de Status de Assinatura & Cupom */}
           <div className="w-full md:w-80 bg-slate-950/90 border border-indigo-500/30 rounded-2xl p-5 backdrop-blur-md shadow-2xl relative overflow-hidden shrink-0">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <Crown size={20} className="text-amber-400 fill-amber-400" />
-                <span className="font-black uppercase tracking-wider text-xs text-amber-300">
-                  MEMBRO VIP PREMIUM
+                <Crown size={20} className={isPremiumActive ? "text-amber-400 fill-amber-400" : "text-slate-400"} />
+                <span className={`font-black uppercase tracking-wider text-xs ${isPremiumActive ? "text-amber-300" : "text-slate-300"}`}>
+                  {isSuperAdmin ? "SUPER ADMIN (ILIMITADO)" : (isPremiumActive ? "MEMBRO VIP PREMIUM" : "PLANO GRATUITO")}
                 </span>
               </div>
+              {isPremiumActive && (
+                <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[9px] font-black uppercase px-2 py-0.5 rounded-full">
+                  Sem Vinhetas
+                </span>
+              )}
             </div>
 
             <div className="text-xs text-indigo-200 font-bold bg-indigo-500/15 p-3 rounded-xl border border-indigo-500/20 mb-3">
-              Acesso ilimitado até: <span className="text-white font-black">{getFormatExpiryDate(status?.expiryDate)}</span>
+              {isPremiumActive ? (
+                <>Acesso Premium ativo até: <span className="text-white font-black">{getFormatExpiryDate(status?.expiryDate)}</span></>
+              ) : (
+                <span className="text-slate-300">Resgate um cupom para áudio sem anúncios e limites:</span>
+              )}
             </div>
 
             <div className="space-y-2">

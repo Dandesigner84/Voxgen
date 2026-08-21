@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Radio, Upload, Play, Pause, SkipForward, Mic2, Clock, Youtube, Trash2, Link, Smartphone, Music, CheckSquare, Square, Lock, Sliders, Volume2, CloudUpload, Repeat, Repeat1, Shuffle, FileAudio, AlertCircle, Loader2, Search, Star } from 'lucide-react';
 import { AudioItem, UserRole, UserFeedback } from '../types';
-import { isSmartPlayerUnlocked } from '../services/monetizationService';
+import { isSmartPlayerUnlocked, getUserStatus } from '../services/monetizationService';
 import { usePlatformDetection } from '../hooks/usePlatformDetection';
 import { getCorporatePlaylist, saveCorporatePlaylist } from '../services/corporateService';
 import { generateSpeech } from '../services/geminiService';
@@ -134,9 +134,11 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
   const { isIOS } = usePlatformDetection();
   const [isPremium, setIsPremium] = useState(false);
   const isSmartEqEnabledRef = useRef(isSmartEqEnabled);
+  const isSuperAdmin = userEmail === 'limadan389@gmail.com';
   const isCorpAdmin = userRole === 'corporate-admin';
   const isCorpUser = userRole === 'corporate-user';
   const isCorporateMode = isCorpAdmin || isCorpUser;
+  const hasActivePlan = isPremium || isCorporateMode || userRole === 'admin' || isSuperAdmin;
   const currentTrack = playlist[currentTrackIndex];
 
   async function loadFeedbacks() {
@@ -300,8 +302,8 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
           navigator.mediaSession.playbackState = 'playing';
       }
 
-      // Lógica de Vinheta Aleatória: Tenta tocar se for a primeira vez ou random 30%
-      const shouldPlayVignette = (getRandomFloat() > 0.7 || !hasPlayedVignetteRef.current);
+      // Lógica de Vinheta Aleatória: Toca apenas para usuários Free
+      const shouldPlayVignette = !hasActivePlan && (getRandomFloat() > 0.7 || !hasPlayedVignetteRef.current);
       
       if (shouldPlayVignette) {
           playVignette().catch(err => {
@@ -342,6 +344,15 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
   };
 
   async function playVignette() {
+      // Never play vignette for active plans, premium members, or admins
+      if (hasActivePlan) {
+          console.log("[SmartPlayer] Vinheta ignorada: Membro com plano ativo / Premium / Admin.");
+          setIsVignettePlaying(false);
+          if (playlist[currentTrackIndex]) playTrack(playlist[currentTrackIndex]);
+          startScheduler();
+          return;
+      }
+
       const ctx = initAudioContext();
       
       // Se não temos a vinheta carregada, tentamos carregar agora
@@ -581,8 +592,8 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
   function handleNextTrack() {
       if (playlist.length === 0) return;
 
-      // Sorteia vinheta aleatória entre faixas (20% de chance)
-      const shouldPlayVignette = getRandomFloat() > 0.8;
+      // Sorteia vinheta aleatória entre faixas apenas para usuários Free (20% de chance)
+      const shouldPlayVignette = !hasActivePlan && getRandomFloat() > 0.8;
       if (shouldPlayVignette && !isVignettePlaying) {
           playVignette().catch(err => {
               console.error("Vignette next error:", err);
@@ -915,7 +926,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
       let buffer: AudioBuffer | null = null;
       let narrationFile: File | undefined = undefined;
 
-      if (!isPremium && narrationsSinceVignetteRef.current >= 4 && vignetteBufferRef.current) {
+      if (!hasActivePlan && narrationsSinceVignetteRef.current >= 4 && vignetteBufferRef.current) {
           buffer = vignetteBufferRef.current;
           narrationsSinceVignetteRef.current = 0;
       } else {
@@ -946,7 +957,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                       narrationFile = uploadItem.file;
                   }
               }
-              if ((buffer || narrationFile) && !isPremium) narrationsSinceVignetteRef.current += 1;
+              if ((buffer || narrationFile) && !hasActivePlan) narrationsSinceVignetteRef.current += 1;
           }
       }
       
@@ -1298,14 +1309,26 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
   useEffect(() => {
     const checkPremium = async () => {
-      const p = await isSmartPlayerUnlocked();
-      setIsPremium(p);
+      const isSuper = userEmail === 'limadan389@gmail.com';
+      const status = await getUserStatus(userEmail);
+      const isUnlocked = (status.plan === 'premium') || (await isSmartPlayerUnlocked(userEmail)) || (userRole === 'admin') || isSuper;
+      setIsPremium(isUnlocked);
     };
     checkPremium();
+
+    const handlePlanUpdated = () => {
+      setIsPremium(true);
+    };
+    window.addEventListener('voxgen_plan_updated', handlePlanUpdated);
+
     setTimeout(() => {
       loadFeedbacks().catch(err => console.warn(err));
     }, 0);
-  }, []);
+
+    return () => {
+      window.removeEventListener('voxgen_plan_updated', handlePlanUpdated);
+    };
+  }, [userEmail, userRole]);
 
   useEffect(() => {
     if (highlightedFeedbacks.length > 1) {
@@ -1486,6 +1509,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
   useEffect(() => {
     const loadVignette = async () => {
+        if (hasActivePlan) return;
         if (vignetteBufferRef.current) return;
         try {
             const ctx = initAudioContext();
@@ -1496,7 +1520,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
     };
     loadVignette();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [hasActivePlan]);
 
   // Pré-carrega a próxima faixa automaticamente ao mudar de faixa ou alterar playlist
   useEffect(() => {

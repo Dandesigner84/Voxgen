@@ -101,18 +101,22 @@ export const refineText = async (text: string, tone: ToneType | string, useBackg
     Texto Original: "${text}"
   `;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-    });
-    
-    let cleanedText = response.text || text;
-    cleanedText = cleanedText.replace(/^["']|["']$/g, "").trim();
-    return cleanedText;
-  } catch (e) {
-    return text; 
+  const textModels = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+  for (const model of textModels) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+      });
+      
+      let cleanedText = response.text || text;
+      cleanedText = cleanedText.replace(/^["']|["']$/g, "").trim();
+      return cleanedText;
+    } catch (e) {
+      console.warn(`[refineText] Model ${model} failed:`, e);
+    }
   }
+  return text;
 };
 
 export const addAutomaticSFX = async (text: string): Promise<string> => {
@@ -126,15 +130,19 @@ export const addAutomaticSFX = async (text: string): Promise<string> => {
     TEXTO: "${text}"
   `;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-    });
-    return response.text || text;
-  } catch (e) {
-    return text;
+  const textModels = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+  for (const model of textModels) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+      });
+      return response.text || text;
+    } catch (e) {
+      console.warn(`[addAutomaticSFX] Model ${model} failed:`, e);
+    }
   }
+  return text;
 };
 
 const callTTS = async (textChunk: string, voiceName: string, isCustom: boolean): Promise<string> => {
@@ -180,67 +188,92 @@ const callTTS = async (textChunk: string, voiceName: string, isCustom: boolean):
     }
 
     const ai = getClient();
-    const MAX_RETRIES = 5;
     const effectiveVoice = voiceName.split('-')[0];
     
     // Safety mapping for Gemini Prebuilt Voices
     const validGeminiVoices = ['Puck', 'Charon', 'Kore', 'Fenrir', 'Aoede'];
-    if (!validGeminiVoices.includes(effectiveVoice) && !voiceName.includes('-')) {
-        // Fallback to Kore if voice is unknown
-    }
-
     const customVoiceData = !validGeminiVoices.includes(effectiveVoice) && !voiceName.includes('-') 
         ? getCustomVoiceById(effectiveVoice) 
         : null;
 
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        try {
-            console.log(`[Gemini TTS] Attempt ${attempt} for voice: ${effectiveVoice}`);
-            if (customVoiceData && customVoiceData.audioSampleBase64) {
-                const mimeType = getMimeTypeFromBase64(customVoiceData.audioSampleBase64);
-                const base64Sample = customVoiceData.audioSampleBase64.split(',')[1] || customVoiceData.audioSampleBase64;
+    const modelsToTry = [
+        "gemini-2.5-flash",
+        "gemini-3.1-flash-tts-preview",
+        "gemini-2.0-flash"
+    ];
+
+    let lastErrorMessage = "";
+
+    for (const modelName of modelsToTry) {
+        for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+                console.log(`[Gemini TTS] Trying model ${modelName} (attempt ${attempt}) for voice: ${effectiveVoice}`);
                 
-                // For custom voice "cloning", we use the multimodal capability of Gemini 3.1 Flash TTS
-                const response = await ai.models.generateContent({
-                    model: "gemini-3.1-flash-tts-preview",
-                    contents: {
-                        parts: [
-                            { inlineData: { mimeType: mimeType, data: base64Sample } },
-                            { text: `Siga o timbre e estilo deste áudio. Leia exatamente este texto com emoção e clareza em Português Brasil: "${textChunk}"` }
-                        ]
-                    },
-                    config: { 
-                        responseModalities: [Modality.AUDIO]
-                    }
-                });
-                return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
-            } 
-            
-            // Map to a valid voice if not standard
-            const finalVoice = validGeminiVoices.includes(effectiveVoice) ? effectiveVoice : 'Kore';
-            
-            const response = await ai.models.generateContent({
-                model: "gemini-3.1-flash-tts-preview",
-                contents: [{ parts: [{ text: textChunk }] }],
-                config: {
-                    responseModalities: [Modality.AUDIO],
-                    speechConfig: {
-                        voiceConfig: { prebuiltVoiceConfig: { voiceName: finalVoice } },
-                    },
-                },
-            });
-            return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
-        } catch (e: any) {
-            const isQuotaError = e.message?.includes("RESOURCE_EXHAUSTED") || e.message?.includes("429");
-            const backoffTime = isQuotaError ? Math.pow(2, attempt) * 2000 : Math.pow(2, attempt) * 1000;
-            
-            console.warn(`[Gemini TTS] Attempt ${attempt} failed: ${e.message}. Retrying in ${backoffTime}ms...`);
-            await wait(backoffTime);
-            
-            if (attempt === MAX_RETRIES) throw new Error(`Gemini API Quota/Error: ${e.message || "Unknown error"}`, { cause: e });
+                if (customVoiceData && customVoiceData.audioSampleBase64) {
+                    const mimeType = getMimeTypeFromBase64(customVoiceData.audioSampleBase64);
+                    const base64Sample = customVoiceData.audioSampleBase64.split(',')[1] || customVoiceData.audioSampleBase64;
+                    
+                    const response = await ai.models.generateContent({
+                        model: modelName,
+                        contents: {
+                            parts: [
+                                { inlineData: { mimeType: mimeType, data: base64Sample } },
+                                { text: `Siga o timbre e estilo deste áudio. Leia exatamente este texto com emoção e clareza em Português Brasil: "${textChunk}"` }
+                            ]
+                        },
+                        config: { 
+                            responseModalities: [Modality.AUDIO]
+                        }
+                    });
+                    const resAudio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+                    if (resAudio) return resAudio;
+                } else {
+                    const finalVoice = validGeminiVoices.includes(effectiveVoice) ? effectiveVoice : 'Kore';
+                    
+                    const response = await ai.models.generateContent({
+                        model: modelName,
+                        contents: [{ parts: [{ text: textChunk }] }],
+                        config: {
+                            responseModalities: [Modality.AUDIO],
+                            speechConfig: {
+                                voiceConfig: { prebuiltVoiceConfig: { voiceName: finalVoice } },
+                            },
+                        },
+                    });
+                    const resAudio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+                    if (resAudio) return resAudio;
+                }
+            } catch (e: any) {
+                lastErrorMessage = e.message || "Erro desconhecido";
+                const isQuotaError = lastErrorMessage.includes("RESOURCE_EXHAUSTED") || lastErrorMessage.includes("429");
+                console.warn(`[Gemini TTS] Model ${modelName} attempt ${attempt} failed: ${lastErrorMessage}`);
+                
+                if (isQuotaError) {
+                    await wait(800);
+                } else {
+                    await wait(300);
+                }
+            }
         }
     }
-    throw new Error("Falha ao chamar API Gemini após múltiplas tentativas.");
+
+    // Try client-side SpeechSynthesis if available
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        try {
+            const utterance = new SpeechSynthesisUtterance(textChunk);
+            utterance.lang = 'pt-BR';
+            window.speechSynthesis.speak(utterance);
+        } catch (synthErr) {
+            console.warn("SpeechSynthesis fallback failed:", synthErr);
+        }
+    }
+
+    const isQuotaExhausted = lastErrorMessage.includes("RESOURCE_EXHAUSTED") || lastErrorMessage.includes("429");
+    if (isQuotaExhausted) {
+        throw new Error("O limite de requisições da API Gemini foi atingido temporariamente (Cota Excedida / Erro 429). Por favor, aguarde alguns instantes antes de gerar novo áudio.");
+    }
+
+    throw new Error(`Falha ao gerar narração: ${lastErrorMessage}`);
 };
 
 export const generateSpeech = async (rawText: string, voice: string): Promise<string> => {
