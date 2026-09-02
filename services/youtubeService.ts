@@ -4,6 +4,8 @@ export interface YouTubeSearchResult {
     title: string;
     thumbnail: string;
     channelTitle: string;
+    playlistId?: string;
+    isPlaylist?: boolean;
 }
 
 /**
@@ -13,8 +15,13 @@ export const extractYouTubeVideoId = (input: string): string | null => {
     if (!input) return null;
     const trimmed = input.trim();
     
-    // Regex for youtu.be/, youtube.com/watch?v=, embed/, v/, shorts/, live/
-    const ytRegExp = /(?:youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=|shorts\/|live\/)|youtu\.be\/)([^"&?/\s]{11})/;
+    // Explicitly reject if it's purely a playlist URL without a video parameter
+    if (trimmed.includes('/playlist?') && !trimmed.includes('v=')) {
+        return null;
+    }
+
+    // Regex for youtu.be/, youtube.com/watch?v=, embed/, v/, shorts/, live/, music.youtube.com
+    const ytRegExp = /(?:(?:www\.|music\.)?youtube\.com\/(?:[^/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=|shorts\/|live\/)|youtu\.be\/)([^"&?/\s]{11})/;
     const match = trimmed.match(ytRegExp);
     if (match && match[1]) {
         return match[1];
@@ -26,8 +33,29 @@ export const extractYouTubeVideoId = (input: string): string | null => {
         return vMatch[1];
     }
 
-    // Direct 11-char video ID
-    if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
+    // Direct 11-char video ID (must not start with PL)
+    if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed) && !trimmed.startsWith('PL')) {
+        return trimmed;
+    }
+
+    return null;
+};
+
+/**
+ * Extracts YouTube Playlist ID (e.g., PL..., RD..., UU..., LL..., OLAK5uy_...) from URL or text
+ */
+export const extractYouTubePlaylistId = (input: string): string | null => {
+    if (!input) return null;
+    const trimmed = input.trim();
+
+    // Match ?list=... or &list=...
+    const listMatch = trimmed.match(/[?&]list=([a-zA-Z0-9_-]+)/);
+    if (listMatch && listMatch[1]) {
+        return listMatch[1];
+    }
+
+    // Direct Playlist IDs: PL..., RD..., UU..., LL..., OLAK5uy_...
+    if (/^(?:PL|RD|UU|LL|FL|OLAK5uy_)[a-zA-Z0-9_-]+$/.test(trimmed)) {
         return trimmed;
     }
 
@@ -39,32 +67,73 @@ export const extractYouTubeVideoId = (input: string): string | null => {
  */
 export const getYouTubeMetadata = async (input: string): Promise<YouTubeSearchResult> => {
     const videoId = extractYouTubeVideoId(input);
-    if (!videoId) {
+    const playlistId = extractYouTubePlaylistId(input);
+
+    if (!videoId && !playlistId) {
         throw new Error('INVALID_URL');
     }
 
-    try {
-        const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
-        const response = await fetch(oembedUrl);
-        if (response.ok) {
-            const data = await response.json();
-            return {
-                videoId,
-                title: data.title || `Trilha YouTube (${videoId})`,
-                thumbnail: data.thumbnail_url || `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
-                channelTitle: data.author_name || 'YouTube'
-            };
+    // 1. If video ID is available
+    if (videoId) {
+        try {
+            const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+            const response = await fetch(oembedUrl);
+            if (response.ok) {
+                const data = await response.json();
+                return {
+                    videoId,
+                    playlistId: playlistId || undefined,
+                    isPlaylist: !!playlistId,
+                    title: data.title || `Trilha YouTube (${videoId})`,
+                    thumbnail: data.thumbnail_url || `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+                    channelTitle: data.author_name || 'YouTube'
+                };
+            }
+        } catch (e) {
+            console.warn('YouTube oEmbed unavailable for video, using fallback metadata', e);
         }
-    } catch (e) {
-        console.warn('YouTube oEmbed unavailable, using fallback metadata', e);
+
+        return {
+            videoId,
+            playlistId: playlistId || undefined,
+            isPlaylist: !!playlistId,
+            title: `Trilha YouTube (${videoId})`,
+            thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+            channelTitle: 'YouTube'
+        };
     }
 
-    return {
-        videoId,
-        title: `Trilha YouTube (${videoId})`,
-        thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
-        channelTitle: 'YouTube'
-    };
+    // 2. If only playlist ID is available
+    if (playlistId) {
+        try {
+            const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/playlist?list=${playlistId}&format=json`;
+            const response = await fetch(oembedUrl);
+            if (response.ok) {
+                const data = await response.json();
+                return {
+                    videoId: '',
+                    playlistId,
+                    isPlaylist: true,
+                    title: data.title || `Playlist YouTube (${playlistId.substring(0, 8)}...)`,
+                    thumbnail: data.thumbnail_url || 'https://img.youtube.com/vi/default/hqdefault.jpg',
+                    channelTitle: data.author_name || 'YouTube Playlist'
+                };
+            }
+        } catch (e) {
+            console.warn('YouTube oEmbed unavailable for playlist, using fallback metadata', e);
+        }
+
+        return {
+            videoId: '',
+            playlistId,
+            isPlaylist: true,
+            title: `Playlist YouTube (${playlistId.substring(0, 10)})`,
+            thumbnail: 'https://img.youtube.com/vi/default/hqdefault.jpg',
+            channelTitle: 'YouTube Playlist'
+        };
+    }
+
+    throw new Error('INVALID_URL');
 };
 
 export const buscarYouTube = async (query: string): Promise<YouTubeSearchResult[]> => {

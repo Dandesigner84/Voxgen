@@ -6,7 +6,7 @@ import { isSmartPlayerUnlocked, getUserStatus } from '../services/monetizationSe
 import { usePlatformDetection } from '../hooks/usePlatformDetection';
 import { getCorporatePlaylist, saveCorporatePlaylist } from '../services/corporateService';
 import { generateSpeech } from '../services/geminiService';
-import { buscarYouTube, YouTubeSearchResult, getYouTubeMetadata, extractYouTubeVideoId } from '../services/youtubeService';
+import { buscarYouTube, YouTubeSearchResult, getYouTubeMetadata, extractYouTubeVideoId, extractYouTubePlaylistId } from '../services/youtubeService';
 import { decodeAudioData, audioBufferToWav } from '../utils/audioUtils';
 import { VIGNETTE_TEXT } from '../constants';
 import { getAllFeedbacks } from '../services/analyticsService';
@@ -17,6 +17,8 @@ interface Track {
   name: string;
   src: string; 
   thumbnail?: string;
+  isPlaylist?: boolean;
+  playlistId?: string;
 }
 
 interface UploadedNarrationFile {
@@ -92,10 +94,14 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
   
   const [isBackgroundPlayEnabled, setIsBackgroundPlayEnabled] = useState(true);
   const [showMiniPlayer, setShowMiniPlayer] = useState(false);
+  const [ytErrorMessage, setYtErrorMessage] = useState<string | null>(null);
 
   const audioElRef = useRef<HTMLAudioElement | null>(null);
   const narrationAudioElRef = useRef<HTMLAudioElement | null>(null);
   const ytPlayerRef = useRef<any>(null);
+  const ytContainerWrapperRef = useRef<HTMLDivElement | null>(null);
+  const pendingYtTrackRef = useRef<Track | null>(null);
+  const currentTrackRef = useRef<Track | null>(null);
   const currentYtVideoIdRef = useRef<string | null>(null);
   const trackGainNodeRef = useRef<GainNode | null>(null); // Renamed from gainNodeRef for clarity
   const masterBusGainRef = useRef<GainNode | null>(null);
@@ -151,6 +157,11 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
   const isPlayingRef = useRef(isPlaying);
   const isVignettePlayingRef = useRef(isVignettePlaying);
   const intervalSecondsRef = useRef(intervalSeconds);
+
+  isPlayingRef.current = isPlaying;
+  isVignettePlayingRef.current = isVignettePlaying;
+  intervalSecondsRef.current = intervalSeconds;
+  currentTrackRef.current = currentTrack;
 
 
 
@@ -209,47 +220,91 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
   function initYoutubePlayer() {
     console.log("[YouTube] Tentando inicializar player...");
-    if (window.YT && window.YT.Player && !ytPlayerRef.current) {
-        try {
-            const playerElement = document.getElementById('youtube-player-hidden');
-            if (!playerElement) {
-                console.error("[YouTube] Elemento placeholder não encontrado!");
-                return;
-            }
+    if (typeof window === 'undefined') return;
+    if (!window.YT || !window.YT.Player) {
+        console.log(`[YouTube] API do YouTube ainda não carregada.`);
+        return;
+    }
+    if (ytPlayerRef.current) {
+        return;
+    }
 
-            ytPlayerRef.current = new window.YT.Player('youtube-player-hidden', {
-                height: '100%', width: '100%', // Preenche o wrapper responsivo
-                playerVars: { 
-                    'autoplay': 1, 
-                    'controls': 0, 
-                    'disablekb': 1,
-                    'modestbranding': 1,
-                    'iv_load_policy': 3,
-                    'rel': 0
-                },
-                events: { 
-                    'onReady': () => { 
-                        console.log("[YouTube] OnReady disparado!");
-                        setIsYtReady(true);
-                    },
-                    'onStateChange': onPlayerStateChange,
-                    'onError': (e: any) => {
-                        console.error("[YouTube] Erro no player:", e.data);
-                        // Se falhou o carregamento, pula para a próxima
-                        handleNextTrack();
-                    }
-                }
-            });
-        } catch(e) { 
-            console.error("[YouTube] Erro na construção do player:", e); 
+    try {
+        let playerElement = document.getElementById('youtube-player-hidden');
+        if (!playerElement && ytContainerWrapperRef.current) {
+            ytContainerWrapperRef.current.innerHTML = '';
+            playerElement = document.createElement('div');
+            playerElement.id = 'youtube-player-hidden';
+            playerElement.className = 'w-full h-full';
+            ytContainerWrapperRef.current.appendChild(playerElement);
         }
-    } else {
-        console.log(`[YouTube] Condições não atendidas: YT=${!!window.YT}, Player=${!!window.YT?.Player}, active=${!!ytPlayerRef.current}`);
+
+        if (!playerElement) {
+            console.error("[YouTube] Elemento placeholder não encontrado!");
+            return;
+        }
+
+        ytPlayerRef.current = new window.YT.Player('youtube-player-hidden', {
+            height: '100%', 
+            width: '100%',
+            playerVars: { 
+                autoplay: 1, 
+                controls: 1, 
+                disablekb: 0,
+                enablejsapi: 1,
+                modestbranding: 1,
+                iv_load_policy: 3,
+                playsinline: 1,
+                rel: 0,
+                origin: window.location.origin
+            },
+            events: { 
+                onReady: () => { 
+                    console.log("[YouTube] OnReady disparado com sucesso!");
+                    setIsYtReady(true);
+                    setYtErrorMessage(null);
+                    if (pendingYtTrackRef.current) {
+                        const queued = pendingYtTrackRef.current;
+                        pendingYtTrackRef.current = null;
+                        playTrack(queued);
+                    } else if (isPlayingRef.current && currentTrackRef.current?.type === 'youtube') {
+                        playTrack(currentTrackRef.current);
+                    }
+                },
+                onStateChange: onPlayerStateChange,
+                onError: (e: any) => {
+                    console.error("[YouTube] Erro no player:", e.data);
+                    setIsBuffering(false);
+                    let msg = "Falha ao reproduzir faixa do YouTube.";
+                    if (e.data === 101 || e.data === 150) {
+                        msg = "Este vídeo do YouTube não permite reprodução incorporada em apps externos.";
+                    } else if (e.data === 100) {
+                        msg = "Vídeo do YouTube não encontrado ou excluído.";
+                    } else if (e.data === 2) {
+                        msg = "Parâmetro ou ID do YouTube inválido.";
+                    }
+                    setYtErrorMessage(msg);
+                    setTimeout(() => {
+                        setYtErrorMessage(null);
+                        handleNextTrack();
+                    }, 2500);
+                }
+            }
+        });
+    } catch(e) { 
+        console.error("[YouTube] Erro na construção do player:", e); 
     }
   }
 
   const onPlayerStateChange = (event: any) => {
-      if (event.data === window.YT.PlayerState.ENDED) {
+      if (!window.YT) return;
+      if (event.data === window.YT.PlayerState.PLAYING) {
+          setIsBuffering(false);
+          setYtErrorMessage(null);
+      } else if (event.data === window.YT.PlayerState.BUFFERING) {
+          setIsBuffering(true);
+      } else if (event.data === window.YT.PlayerState.ENDED) {
+          setIsBuffering(false);
           handleNextTrack();
       }
   };
@@ -555,30 +610,74 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
               };
           }
       } else if (track.type === 'youtube') {
-          if (ytPlayerRef.current && isYtReady) {
-               try {
-                   const player = ytPlayerRef.current;
-                   console.log(`[YouTube] playTrack: id=${track.src}, isReady=${isYtReady}`);
-  
-                   if (typeof player.loadVideoById !== 'function') {
-                       console.warn("[YouTube] API carregada mas loadVideoById não é função.");
-                       return;
-                   }
-  
-                   if (currentYtVideoIdRef.current !== track.src) {
-                       player.loadVideoById(track.src);
-                       currentYtVideoIdRef.current = track.src;
-                   } else {
-                       const state = player.getPlayerState?.();
-                       if (state !== 1) player.playVideo();
-                   }
-                   if (player.setVolume) {
-                       player.setVolume(isNarratingRef.current ? 10 : 100);
-                   }
-                   if (player.unMute) player.unMute();
-               } catch(e) {
-                   console.error("Erro ao reproduzir YouTube", e);
-               }
+          setIsBuffering(true);
+          setYtErrorMessage(null);
+
+          if (!ytPlayerRef.current || !isYtReady) {
+              console.log(`[YouTube] Player ainda não inicializado. Enfileirando faixa ${track.name}`);
+              pendingYtTrackRef.current = track;
+              initYoutubePlayer();
+              return;
+          }
+
+          try {
+              const player = ytPlayerRef.current;
+              const isPlaylistTrack = track.isPlaylist || !!track.playlistId || track.src.startsWith('PL');
+              const targetPlaylistId = track.playlistId || (track.src.startsWith('PL') ? track.src : null);
+
+              console.log(`[YouTube] playTrack: id=${track.src}, isPlaylist=${isPlaylistTrack}, playlistId=${targetPlaylistId}`);
+
+              if (isPlaylistTrack && targetPlaylistId) {
+                  if (currentYtVideoIdRef.current !== targetPlaylistId) {
+                      currentYtVideoIdRef.current = targetPlaylistId;
+                      if (typeof player.loadPlaylist === 'function') {
+                          player.loadPlaylist({
+                              list: targetPlaylistId,
+                              listType: 'playlist',
+                              index: 0
+                          });
+                      } else if (typeof player.cuePlaylist === 'function') {
+                          player.cuePlaylist({
+                              list: targetPlaylistId,
+                              listType: 'playlist',
+                              index: 0
+                          });
+                          setTimeout(() => {
+                              try { player.playVideo?.(); } catch (e) { void e; }
+                          }, 300);
+                      }
+                  } else {
+                      const state = player.getPlayerState?.();
+                      if (state !== 1 && state !== 3 && typeof player.playVideo === 'function') {
+                          player.playVideo();
+                      }
+                  }
+              } else {
+                  if (currentYtVideoIdRef.current !== track.src) {
+                      currentYtVideoIdRef.current = track.src;
+                      if (typeof player.loadVideoById === 'function') {
+                          player.loadVideoById(track.src);
+                      } else if (typeof player.cueVideoById === 'function') {
+                          player.cueVideoById(track.src);
+                          setTimeout(() => {
+                              try { player.playVideo?.(); } catch (e) { void e; }
+                          }, 300);
+                      }
+                  } else {
+                      const state = player.getPlayerState?.();
+                      if (state !== 1 && state !== 3 && typeof player.playVideo === 'function') {
+                          player.playVideo();
+                      }
+                  }
+              }
+
+              if (player.setVolume) {
+                  player.setVolume(isNarratingRef.current ? 10 : 100);
+              }
+              if (player.unMute) player.unMute();
+          } catch(e) {
+              console.error("Erro ao reproduzir YouTube", e);
+              setIsBuffering(false);
           }
       }
   }
@@ -1127,30 +1226,66 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
   const fadeYouTubeVolume = (startVol: number, endVol: number, durationMs: number) => {
       if (!ytPlayerRef.current?.setVolume) return;
-      if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
-      const steps = 20; const stepTime = durationMs / steps; const volStep = (endVol - startVol) / steps;
+      if (fadeIntervalRef.current) {
+          clearInterval(fadeIntervalRef.current);
+          fadeIntervalRef.current = null;
+      }
+      const steps = 8;
+      const stepTime = Math.max(75, durationMs / steps);
+      const volStep = (endVol - startVol) / steps;
       let currentVol = startVol;
       fadeIntervalRef.current = window.setInterval(() => {
           currentVol += volStep;
           if ((volStep > 0 && currentVol >= endVol) || (volStep < 0 && currentVol <= endVol)) {
-              currentVol = endVol; clearInterval(fadeIntervalRef.current!);
+              currentVol = endVol;
+              if (fadeIntervalRef.current) {
+                  clearInterval(fadeIntervalRef.current);
+                  fadeIntervalRef.current = null;
+              }
           }
-          try { ytPlayerRef.current.setVolume(currentVol); } catch (e) { void e; }
+          try {
+              ytPlayerRef.current?.setVolume?.(Math.round(currentVol));
+          } catch (e) { void e; }
       }, stepTime);
   };
 
   const addWebLink = async () => {
       const trimmedInput = webInput.trim();
+      if (!trimmedInput) return;
+
+      const playlistId = extractYouTubePlaylistId(trimmedInput);
       const videoId = extractYouTubeVideoId(trimmedInput);
       const spotifyRegExp = /open\.spotify\.com\/(track|album|playlist|episode)\/([a-zA-Z0-9]+)/;
 
-      if (videoId) {
+      if (playlistId && !videoId) {
+          const trackId = crypto.randomUUID();
+          const placeholderName = `Playlist YouTube (${playlistId.substring(0, 8)}...)`;
+          setPlaylist(prev => [...prev, { 
+              id: trackId, 
+              type: 'youtube', 
+              name: placeholderName, 
+              src: playlistId, 
+              isPlaylist: true,
+              playlistId: playlistId,
+              thumbnail: 'https://img.youtube.com/vi/default/hqdefault.jpg' 
+          }]);
+          setWebInput('');
+
+          try {
+              const meta = await getYouTubeMetadata(trimmedInput);
+              if (meta && meta.title) {
+                  setPlaylist(prev => prev.map(t => t.id === trackId ? { ...t, name: meta.title, thumbnail: meta.thumbnail } : t));
+              }
+          } catch (e) { void e; }
+      } else if (videoId) {
           const trackId = crypto.randomUUID();
           setPlaylist(prev => [...prev, { 
               id: trackId, 
               type: 'youtube', 
               name: `YouTube Faixa (${videoId})`, 
               src: videoId, 
+              isPlaylist: !!playlistId,
+              playlistId: playlistId || undefined,
               thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` 
           }]);
           setWebInput('');
@@ -1165,7 +1300,9 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
           const match = trimmedInput.match(spotifyRegExp)!;
           setPlaylist(prev => [...prev, { id: crypto.randomUUID(), type: 'spotify', name: `Spotify ${match[1]}`, src: `https://open.spotify.com/embed/${match[1]}/${match[2]}?utm_source=generator&theme=0`, thumbnail: '' }]);
           setWebInput('');
-      } else { alert("Link inválido ou não suportado. Use links diretos de vídeo do YouTube ou faixas do Spotify."); }
+      } else { 
+          alert("Link inválido ou não suportado. Cole links de vídeos ou playlists do YouTube, ou faixas do Spotify."); 
+      }
   };
 
   const handleSearchYT = async () => {
@@ -1193,7 +1330,9 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
           id: crypto.randomUUID(), 
           type: 'youtube', 
           name: video.title, 
-          src: video.videoId, 
+          src: video.videoId || video.playlistId || '', 
+          isPlaylist: video.isPlaylist,
+          playlistId: video.playlistId,
           thumbnail: video.thumbnail 
       };
       setPlaylist(prev => [...prev, newTrack]);
@@ -1206,7 +1345,9 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
         id: crypto.randomUUID(), 
         type: 'youtube', 
         name: video.title, 
-        src: video.videoId, 
+        src: video.videoId || video.playlistId || '', 
+        isPlaylist: video.isPlaylist,
+        playlistId: video.playlistId,
         thumbnail: video.thumbnail 
     };
     
@@ -1549,36 +1690,6 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
   return (
     <div className="max-w-6xl mx-auto w-full px-4 animate-fade-in pb-20 relative">
-        <div 
-            style={showMiniPlayer && currentTrack?.type === 'youtube' && isPlaying ? {
-                position: 'fixed',
-                bottom: '24px',
-                right: '24px',
-                width: '280px',
-                height: '160px',
-                opacity: '1',
-                borderRadius: '12px',
-                overflow: 'hidden',
-                border: '2px solid rgba(99, 102, 241, 0.5)',
-                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)',
-                zIndex: 50,
-                transition: 'all 0.3s ease-in-out',
-                pointerEvents: 'auto',
-            } : {
-                position: 'fixed',
-                bottom: '4px',
-                right: '4px',
-                width: '1px',
-                height: '1px',
-                opacity: '0.001',
-                overflow: 'hidden',
-                zIndex: -50,
-                pointerEvents: 'none',
-                transition: 'all 0.3s ease-in-out',
-            }}
-        >
-            <div id="youtube-player-hidden" className="w-full h-full"></div>
-        </div>
         <input ref={fileInputRef} type="file" accept=".mp3,.wav,.m4a,.aac,audio/*,audio/mpeg,audio/mp3,audio/x-mpeg,audio/x-mp3" multiple className="hidden" onChange={handleFileSelect} />
         
         {pendingUploads.length > 0 && (
@@ -1657,14 +1768,79 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                          )}
                      </div>
                  ) : (
-                     <>
-                        <div className="w-64 h-64 rounded-full border-4 border-slate-700/50 shadow-2xl mb-6 overflow-hidden bg-black flex items-center justify-center relative">
-                             {currentTrack ? (
-                                 currentTrack.type === 'youtube' ? <img src={currentTrack.thumbnail} className="w-full h-full object-cover" /> : <div className="bg-gradient-to-br from-slate-700 to-slate-800 w-full h-full flex items-center justify-center"><Mic2 size={64} className="text-slate-500 opacity-50" /></div>
-                             ) : <div className="text-slate-600">Sem Faixa</div>}
-                             {isNarratingRef.current && <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm"><Mic2 size={48} className="text-cyan-400 animate-pulse" /></div>}
+                      <>
+                        <div 
+                            ref={ytContainerWrapperRef}
+                            style={showMiniPlayer && currentTrack?.type === 'youtube' && isPlaying ? {
+                                position: 'fixed',
+                                bottom: '24px',
+                                right: '24px',
+                                width: '320px',
+                                height: '180px',
+                                opacity: 1,
+                                borderRadius: '12px',
+                                overflow: 'hidden',
+                                border: '2px solid rgba(99, 102, 241, 0.5)',
+                                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)',
+                                zIndex: 50,
+                                transition: 'all 0.3s ease-in-out',
+                                pointerEvents: 'auto',
+                            } : (currentTrack?.type === 'youtube' && !showMiniPlayer ? {
+                                position: 'relative',
+                                width: '100%',
+                                maxWidth: '440px',
+                                aspectRatio: '16/9',
+                                opacity: 1,
+                                borderRadius: '16px',
+                                overflow: 'hidden',
+                                border: '2px solid rgba(99, 102, 241, 0.4)',
+                                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.6)',
+                                zIndex: 20,
+                                marginBottom: '1.5rem',
+                                backgroundColor: '#000',
+                                pointerEvents: 'auto',
+                            } : {
+                                position: 'fixed',
+                                bottom: '0px',
+                                right: '0px',
+                                width: '240px',
+                                height: '160px',
+                                opacity: 0.001,
+                                overflow: 'hidden',
+                                zIndex: -50,
+                                pointerEvents: 'none',
+                                transition: 'all 0.3s ease-in-out',
+                            })}
+                        >
+                            <div id="youtube-player-hidden" className="w-full h-full"></div>
                         </div>
+
+                        {currentTrack?.type === 'youtube' && showMiniPlayer && (
+                            <div className="w-64 h-64 rounded-full border-4 border-slate-700/50 shadow-2xl mb-6 overflow-hidden bg-black flex items-center justify-center relative">
+                                <img src={currentTrack.thumbnail} className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center p-4 text-center">
+                                    <Youtube size={28} className="text-red-400 mb-1 animate-pulse" />
+                                    <span className="text-xs text-white font-medium">Vídeo no Mini-Player Flutuante</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {currentTrack?.type !== 'youtube' && (
+                            <div className="w-64 h-64 rounded-full border-4 border-slate-700/50 shadow-2xl mb-6 overflow-hidden bg-black flex items-center justify-center relative">
+                                {currentTrack ? (
+                                    <div className="bg-gradient-to-br from-slate-700 to-slate-800 w-full h-full flex items-center justify-center"><Mic2 size={64} className="text-slate-500 opacity-50" /></div>
+                                ) : <div className="text-slate-600">Sem Faixa</div>}
+                                {isNarratingRef.current && <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm"><Mic2 size={48} className="text-cyan-400 animate-pulse" /></div>}
+                            </div>
+                        )}
+
                         <h3 className="text-xl font-bold text-white mb-1 text-center line-clamp-1 max-w-md">{isBuffering ? "Carregando / Bufferizando..." : (currentTrack?.name || (isPlaying ? "Carregando..." : "Aguardando..."))}</h3>
+                         {ytErrorMessage && (
+                             <div className="mt-2 px-3 py-1.5 bg-amber-500/20 border border-amber-500/40 text-amber-200 text-xs rounded-xl flex items-center gap-2 max-w-md text-center">
+                                 <AlertCircle size={14} className="shrink-0 text-amber-400" />
+                                 <span>{ytErrorMessage}</span>
+                             </div>
+                         )}
                          {currentTrack?.type === 'youtube' && isPlaying && (
                             <button 
                                 onClick={() => setShowMiniPlayer(!showMiniPlayer)}
@@ -1822,13 +1998,24 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
                 <div className="h-64 overflow-y-auto custom-scrollbar space-y-2 pr-2">
                     {playlist.map((track, idx) => (
-                        <div key={track.id} className={`flex items-center justify-between p-3 rounded-lg text-sm ${idx === currentTrackIndex ? 'bg-cyan-900/20 border border-cyan-500/30 text-cyan-200' : 'bg-slate-800 text-slate-300'}`}>
-                            <div className="flex items-center gap-3 truncate">
-                                {track.type === 'youtube' ? <Youtube size={14} className="text-red-400" /> : <Music size={14} className="text-green-400" />}
+                        <div key={track.id} className={`flex items-center justify-between p-3 rounded-lg text-sm transition-colors ${idx === currentTrackIndex ? 'bg-cyan-900/20 border border-cyan-500/30 text-cyan-200' : 'bg-slate-800 text-slate-300 hover:bg-slate-750'}`}>
+                            <div 
+                                className="flex items-center gap-3 truncate cursor-pointer flex-1 mr-2"
+                                onClick={() => {
+                                    setCurrentTrackIndex(idx);
+                                    if (!isPlaying) setIsPlaying(true);
+                                }}
+                            >
+                                {track.type === 'youtube' ? <Youtube size={14} className="text-red-400 shrink-0" /> : <Music size={14} className="text-green-400 shrink-0" />}
                                 <span className="truncate">{track.name}</span>
+                                {track.isPlaylist && (
+                                    <span className="text-[10px] bg-red-500/20 text-red-300 border border-red-500/30 px-1.5 py-0.5 rounded uppercase font-semibold shrink-0">
+                                        Playlist
+                                    </span>
+                                )}
                             </div>
                             {!isCorpUser && (
-                                <button onClick={() => setPlaylist(prev => prev.filter(t => t.id !== track.id))} className="text-slate-500 hover:text-red-400"><Trash2 size={14} /></button>
+                                <button onClick={() => setPlaylist(prev => prev.filter(t => t.id !== track.id))} className="text-slate-500 hover:text-red-400 p-1"><Trash2 size={14} /></button>
                             )}
                         </div>
                     ))}
