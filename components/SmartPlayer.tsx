@@ -1707,6 +1707,25 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
 
   return (
     <div className="max-w-6xl mx-auto w-full px-4 animate-fade-in pb-20 relative">
+        {/* Container Invisível em Segundo Plano para o Motor de Áudio do YouTube */}
+        <div 
+            ref={ytContainerWrapperRef}
+            aria-hidden="true"
+            style={{
+                position: 'fixed',
+                top: '-9999px',
+                left: '-9999px',
+                width: '200px',
+                height: '200px',
+                opacity: 0.0001,
+                overflow: 'hidden',
+                zIndex: -999,
+                pointerEvents: 'none',
+            }}
+        >
+            <div id="youtube-player-hidden" className="w-full h-full"></div>
+        </div>
+
         <input ref={fileInputRef} type="file" accept=".mp3,.wav,.m4a,.aac,audio/*,audio/mpeg,audio/mp3,audio/x-mpeg,audio/x-mp3" multiple className="hidden" onChange={handleFileSelect} />
         
         {pendingUploads.length > 0 && (
@@ -1786,23 +1805,6 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                      </div>
                  ) : (
                       <>
-                        <div 
-                            ref={ytContainerWrapperRef}
-                            style={{
-                                position: 'fixed',
-                                bottom: '0px',
-                                right: '0px',
-                                width: '200px',
-                                height: '200px',
-                                opacity: 0.0001,
-                                overflow: 'hidden',
-                                zIndex: -50,
-                                pointerEvents: 'none',
-                            }}
-                        >
-                            <div id="youtube-player-hidden" className="w-full h-full"></div>
-                        </div>
-
                         <div className="w-64 h-64 rounded-full border-4 border-slate-700/50 shadow-2xl mb-6 overflow-hidden bg-black flex items-center justify-center relative group">
                             {currentTrack ? (
                                 currentTrack.type === 'youtube' ? (
