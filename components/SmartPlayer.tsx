@@ -634,16 +634,21 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                           player.loadPlaylist({
                               list: targetPlaylistId,
                               listType: 'playlist',
-                              index: 0
+                              index: 0,
+                              suggestedQuality: 'small'
                           });
                       } else if (typeof player.cuePlaylist === 'function') {
                           player.cuePlaylist({
                               list: targetPlaylistId,
                               listType: 'playlist',
-                              index: 0
+                              index: 0,
+                              suggestedQuality: 'small'
                           });
                           setTimeout(() => {
-                              try { player.playVideo?.(); } catch (e) { void e; }
+                              try { 
+                                  player.setPlaybackQuality?.('small');
+                                  player.playVideo?.(); 
+                              } catch (e) { void e; }
                           }, 300);
                       }
                   } else {
@@ -656,11 +661,20 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                   if (currentYtVideoIdRef.current !== track.src) {
                       currentYtVideoIdRef.current = track.src;
                       if (typeof player.loadVideoById === 'function') {
-                          player.loadVideoById(track.src);
+                          player.loadVideoById({
+                              videoId: track.src,
+                              suggestedQuality: 'small'
+                          });
                       } else if (typeof player.cueVideoById === 'function') {
-                          player.cueVideoById(track.src);
+                          player.cueVideoById({
+                              videoId: track.src,
+                              suggestedQuality: 'small'
+                          });
                           setTimeout(() => {
-                              try { player.playVideo?.(); } catch (e) { void e; }
+                              try { 
+                                  player.setPlaybackQuality?.('small');
+                                  player.playVideo?.(); 
+                              } catch (e) { void e; }
                           }, 300);
                       }
                   } else {
@@ -670,6 +684,10 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                       }
                   }
               }
+
+              try {
+                  player.setPlaybackQuality?.('small');
+              } catch (e) { void e; }
 
               if (player.setVolume) {
                   player.setVolume(isNarratingRef.current ? 10 : 100);
@@ -1785,54 +1803,49 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                                 zIndex: 50,
                                 transition: 'all 0.3s ease-in-out',
                                 pointerEvents: 'auto',
-                            } : (currentTrack?.type === 'youtube' && !showMiniPlayer ? {
-                                position: 'relative',
-                                width: '100%',
-                                maxWidth: '440px',
-                                aspectRatio: '16/9',
-                                opacity: 1,
-                                borderRadius: '16px',
-                                overflow: 'hidden',
-                                border: '2px solid rgba(99, 102, 241, 0.4)',
-                                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.6)',
-                                zIndex: 20,
-                                marginBottom: '1.5rem',
-                                backgroundColor: '#000',
-                                pointerEvents: 'auto',
                             } : {
                                 position: 'fixed',
                                 bottom: '0px',
                                 right: '0px',
-                                width: '240px',
-                                height: '160px',
-                                opacity: 0.001,
+                                width: '200px',
+                                height: '200px',
+                                opacity: 0.0001,
                                 overflow: 'hidden',
                                 zIndex: -50,
                                 pointerEvents: 'none',
                                 transition: 'all 0.3s ease-in-out',
-                            })}
+                            }}
                         >
                             <div id="youtube-player-hidden" className="w-full h-full"></div>
                         </div>
 
-                        {currentTrack?.type === 'youtube' && showMiniPlayer && (
-                            <div className="w-64 h-64 rounded-full border-4 border-slate-700/50 shadow-2xl mb-6 overflow-hidden bg-black flex items-center justify-center relative">
-                                <img src={currentTrack.thumbnail} className="w-full h-full object-cover" />
-                                <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center p-4 text-center">
-                                    <Youtube size={28} className="text-red-400 mb-1 animate-pulse" />
-                                    <span className="text-xs text-white font-medium">Vídeo no Mini-Player Flutuante</span>
+                        <div className="w-64 h-64 rounded-full border-4 border-slate-700/50 shadow-2xl mb-6 overflow-hidden bg-black flex items-center justify-center relative group">
+                            {currentTrack ? (
+                                currentTrack.type === 'youtube' ? (
+                                    <img 
+                                        src={currentTrack.thumbnail || `https://img.youtube.com/vi/${currentTrack.src}/hqdefault.jpg`} 
+                                        alt={currentTrack.name}
+                                        className="w-full h-full object-cover" 
+                                    />
+                                ) : (
+                                    <div className="bg-gradient-to-br from-slate-700 to-slate-800 w-full h-full flex items-center justify-center">
+                                        <Mic2 size={64} className="text-slate-500 opacity-50" />
+                                    </div>
+                                )
+                            ) : (
+                                <div className="text-slate-600">Sem Faixa</div>
+                            )}
+                            {currentTrack?.type === 'youtube' && (
+                                <div className="absolute top-3 right-3 bg-red-600/90 text-white p-1.5 rounded-full shadow-md">
+                                    <Youtube size={14} />
                                 </div>
-                            </div>
-                        )}
-
-                        {currentTrack?.type !== 'youtube' && (
-                            <div className="w-64 h-64 rounded-full border-4 border-slate-700/50 shadow-2xl mb-6 overflow-hidden bg-black flex items-center justify-center relative">
-                                {currentTrack ? (
-                                    <div className="bg-gradient-to-br from-slate-700 to-slate-800 w-full h-full flex items-center justify-center"><Mic2 size={64} className="text-slate-500 opacity-50" /></div>
-                                ) : <div className="text-slate-600">Sem Faixa</div>}
-                                {isNarratingRef.current && <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm"><Mic2 size={48} className="text-cyan-400 animate-pulse" /></div>}
-                            </div>
-                        )}
+                            )}
+                            {isNarratingRef.current && (
+                                <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm">
+                                    <Mic2 size={48} className="text-cyan-400 animate-pulse" />
+                                </div>
+                            )}
+                        </div>
 
                         <h3 className="text-xl font-bold text-white mb-1 text-center line-clamp-1 max-w-md">{isBuffering ? "Carregando / Bufferizando..." : (currentTrack?.name || (isPlaying ? "Carregando..." : "Aguardando..."))}</h3>
                          {ytErrorMessage && (
