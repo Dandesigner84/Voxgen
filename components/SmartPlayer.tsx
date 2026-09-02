@@ -93,7 +93,6 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
   const [currentFeedbackIndex, setCurrentFeedbackIndex] = useState(0);
   
   const [isBackgroundPlayEnabled, setIsBackgroundPlayEnabled] = useState(true);
-  const [showMiniPlayer, setShowMiniPlayer] = useState(false);
   const [ytErrorMessage, setYtErrorMessage] = useState<string | null>(null);
 
   const audioElRef = useRef<HTMLAudioElement | null>(null);
@@ -1789,21 +1788,7 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                       <>
                         <div 
                             ref={ytContainerWrapperRef}
-                            style={showMiniPlayer && currentTrack?.type === 'youtube' && isPlaying ? {
-                                position: 'fixed',
-                                bottom: '24px',
-                                right: '24px',
-                                width: '320px',
-                                height: '180px',
-                                opacity: 1,
-                                borderRadius: '12px',
-                                overflow: 'hidden',
-                                border: '2px solid rgba(99, 102, 241, 0.5)',
-                                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)',
-                                zIndex: 50,
-                                transition: 'all 0.3s ease-in-out',
-                                pointerEvents: 'auto',
-                            } : {
+                            style={{
                                 position: 'fixed',
                                 bottom: '0px',
                                 right: '0px',
@@ -1813,7 +1798,6 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                                 overflow: 'hidden',
                                 zIndex: -50,
                                 pointerEvents: 'none',
-                                transition: 'all 0.3s ease-in-out',
                             }}
                         >
                             <div id="youtube-player-hidden" className="w-full h-full"></div>
@@ -1853,19 +1837,6 @@ const SmartPlayer: React.FC<SmartPlayerProps> = ({
                                  <AlertCircle size={14} className="shrink-0 text-amber-400" />
                                  <span>{ytErrorMessage}</span>
                              </div>
-                         )}
-                         {currentTrack?.type === 'youtube' && isPlaying && (
-                            <button 
-                                onClick={() => setShowMiniPlayer(!showMiniPlayer)}
-                                className={`mt-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 border hover:scale-105 active:scale-95 shadow-sm ${
-                                    showMiniPlayer 
-                                        ? 'bg-red-500/20 text-red-300 border-red-500/30' 
-                                        : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
-                                }`}
-                            >
-                                <Youtube size={12} />
-                                {showMiniPlayer ? 'Ocultar Mini-Player' : 'Mostrar Mini-Player'}
-                            </button>
                          )}
                         
                         <div className="flex items-center gap-6 mt-6">
